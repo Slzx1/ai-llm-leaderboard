@@ -2,8 +2,8 @@ name: Update Leaderboard Data & Deploy GitHub Pages
 
 on:
   schedule:
-    # Every 6 hours UTC (00:00, 06:00, 12:00, 18:00 UTC)
-    - cron: "0 */6 * * *"
+    # Lightweight hourly change-detection probe (only commits & redeploys when contentHash changes)
+    - cron: "0 * * * *"
   push:
     branches: ["main"]
   workflow_dispatch:
@@ -20,6 +20,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      should_deploy: ${{ steps.check.outputs.should_deploy }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -34,23 +36,29 @@ jobs:
       - name: Install pyarrow
         run: python -m pip install --upgrade pip pyarrow
 
-      - name: Fetch latest official leaderboard data (Artificial Analysis + LMArena)
+      - name: Probe & fetch latest official leaderboard data (Artificial Analysis + LMArena)
         run: python scripts/fetch_leaderboard.py
 
-      - name: Commit updated snapshot if data changed (scheduled / manual runs)
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+      - name: Detect changes & decide whether to commit/deploy
+        id: check
         run: |
-          if [ -n "$(git status --porcelain data/leaderboard.json assets/icons/)" ]; then
+          CHANGED="$(git status --porcelain data/leaderboard.json assets/icons/)"
+          if [ -n "$CHANGED" ] && { [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; }; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add data/leaderboard.json assets/icons/
-            git commit -m "chore(data): auto-sync AI LLM leaderboard ($(date -u +'%Y-%m-%d %H:%M UTC'))"
+            git commit -m "chore(data): sync AI LLM leaderboard ($(date -u +'%Y-%m-%d %H:%M UTC'))"
             git push
+            echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_deploy=true" >> "$GITHUB_OUTPUT"
           else
-            echo "Leaderboard data unchanged."
+            echo "Content hash unchanged; skipping Pages rebuild."
+            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Assemble clean static site artifact
+        if: steps.check.outputs.should_deploy == 'true'
         run: |
           rm -rf _site
           mkdir -p _site/scripts
@@ -61,15 +69,18 @@ jobs:
           cp scripts/app.js _site/scripts/
 
       - name: Setup Pages
+        if: steps.check.outputs.should_deploy == 'true'
         uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
+        if: steps.check.outputs.should_deploy == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: "_site"
 
   deploy:
     needs: build
+    if: needs.build.outputs.should_deploy == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

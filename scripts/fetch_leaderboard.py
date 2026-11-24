@@ -20,6 +20,7 @@ Complementary Human Blind-Test Source:
    - lmarena_vision: Vision Arena
 """
 
+import hashlib
 import io
 import json
 import math
@@ -401,17 +402,17 @@ def build_aa_tracks(aa_raw: list, icon_manifest: dict, today_str: str):
         "aa_intelligence",
         "综合智力总榜 (AA Intelligence Index v5)",
         "综合智力总榜",
-        "Artificial Analysis Intelligence Index v5.0.1 权威独立基准，涵盖 Claude Fable 5.2、GPT-6.2 Astra/Sol、Gemini 4 等最新旗舰，同表呈现编程、终端 Agent、人类终极考、科研推理、办公实战、速度与价格。",
+        "Artificial Analysis Intelligence Index v5.0.1 权威独立基准，涵盖 Claude Fable 5.2、GPT-6.2 Astra/Sol、Gemini 4 等最新旗舰，同表呈现编程、终端 Agent、前沿学术难题、科研推理、办公实战、速度与价格。",
         [
-            {"key": "intelligenceIndex", "label": "智力指数", "primary": True, "format": "index"},
-            {"key": "frontiercode-2-0", "label": "前沿编程", "format": "pct"},
-            {"key": "terminalbench-4-0", "label": "终端 Agent", "format": "pct"},
-            {"key": "hle-diamond", "label": "人类终极考", "format": "pct"},
-            {"key": "critpt-v2-hard", "label": "科研推理", "format": "pct"},
-            {"key": "aa-briefcase", "label": "办公实战", "format": "elo"},
-            {"key": "automationbench-aa", "label": "自主自动化", "format": "pct"},
-            {"key": "outputSpeed", "label": "速度 tok/s", "format": "speed"},
-            {"key": "priceBlended", "label": "综合价 $/1M", "format": "usd", "lowerIsBetter": True},
+            {"key": "intelligenceIndex", "label": "智力指数", "primary": True, "format": "index", "tooltip": "Artificial Analysis Intelligence Index v5 综合智力指数（0-100），聚合 9 项高难度独立基准"},
+            {"key": "frontiercode-2-0", "label": "前沿编程", "format": "pct", "tooltip": "FrontierCode 2.0：复杂算法与真实软件工程编码能力评测"},
+            {"key": "terminalbench-4-0", "label": "终端 Agent", "format": "pct", "tooltip": "Terminal-Bench 4.0：真实 Linux 终端环境下的自主排错与工程任务完成率"},
+            {"key": "hle-diamond", "label": "前沿学术难题", "format": "pct", "tooltip": "HLE Diamond (Humanity's Last Exam)：博士级跨学科前沿学术难题，测试顶尖深度推理与知识上限"},
+            {"key": "critpt-v2-hard", "label": "科研推理", "format": "pct", "tooltip": "CritPt v2 Hard：高难度物理与前沿科学研究推理基准"},
+            {"key": "aa-briefcase", "label": "办公实战", "format": "elo", "tooltip": "AA-Briefcase Elo：真实商业分析、文档交付与高经济价值职场任务评分"},
+            {"key": "automationbench-aa", "label": "自主自动化", "format": "pct", "tooltip": "AutomationBench-AA：多步骤自主工具调用与复杂工作流自动化完成率"},
+            {"key": "outputSpeed", "label": "速度 tok/s", "format": "speed", "tooltip": "实测 API 输出吞吐速度（每秒生成 Token 数，越高越快）"},
+            {"key": "priceBlended", "label": "综合价 $/1M", "format": "usd", "lowerIsBetter": True, "tooltip": "每百万 Token 综合参考价（输入:输出按 3:1 加权，越低越便宜）"},
         ],
         filter_fn=lambda m: True,
         sort_key="intelligenceIndex",
@@ -422,15 +423,15 @@ def build_aa_tracks(aa_raw: list, icon_manifest: dict, today_str: str):
         "aa_coding",
         "前沿编程与 Agent 工程榜",
         "编程与 Agent",
-        "聚焦 FrontierCode 2.0、Terminal-Bench 4.0、科学终端（TB-Science）、AutomationBench 与多轮长上下文代码推理（MLCR-AA），全面衡量真实软件工程与自主 Agent 能力。",
+        "聚焦 FrontierCode 2.0、Terminal-Bench 4.0、科学终端（TB-Science）、AutomationBench 与长程代码推理（MLCR-AA），全面衡量真实软件工程与自主 Agent 能力。",
         [
-            {"key": "frontiercode-2-0", "label": "前沿编程 2.0", "primary": True, "format": "pct"},
-            {"key": "terminalbench-4-0", "label": "终端工程 4.0", "format": "pct"},
-            {"key": "terminal-bench-science", "label": "科学终端", "format": "pct"},
-            {"key": "automationbench-aa", "label": "自主自动化", "format": "pct"},
-            {"key": "mlcr-aa", "label": "长程代码推理", "format": "pct"},
-            {"key": "intelligenceIndex", "label": "智力指数", "format": "index"},
-            {"key": "priceBlended", "label": "综合价 $/1M", "format": "usd", "lowerIsBetter": True},
+            {"key": "frontiercode-2-0", "label": "前沿编程 2.0", "primary": True, "format": "pct", "tooltip": "FrontierCode 2.0：高难度前沿编程与工程实现评测"},
+            {"key": "terminalbench-4-0", "label": "终端工程 4.0", "format": "pct", "tooltip": "Terminal-Bench 4.0：终端命令行环境下的自主开发与运维任务"},
+            {"key": "terminal-bench-science", "label": "科学终端", "format": "pct", "tooltip": "Terminal-Bench Science：科学计算与实验代码终端实操评测"},
+            {"key": "automationbench-aa", "label": "自主自动化", "format": "pct", "tooltip": "AutomationBench-AA：多步骤自主任务与工具编排完成率"},
+            {"key": "mlcr-aa", "label": "长程代码推理", "format": "pct", "tooltip": "MLCR-AA：多轮长上下文代码理解与修改能力"},
+            {"key": "intelligenceIndex", "label": "智力指数", "format": "index", "tooltip": "Artificial Analysis Intelligence Index v5 综合智力指数"},
+            {"key": "priceBlended", "label": "综合价 $/1M", "format": "usd", "lowerIsBetter": True, "tooltip": "每百万 Token 综合参考价（越低越便宜）"},
         ],
         filter_fn=lambda m: True,
         sort_key="frontiercode-2-0",
@@ -441,14 +442,14 @@ def build_aa_tracks(aa_raw: list, icon_manifest: dict, today_str: str):
         "aa_reasoning",
         "深度推理与科研办公榜",
         "推理与科研",
-        "聚焦 Humanity's Last Exam (HLE Diamond)、前沿科研推理（CritPt v2 Hard）、科学计算、真实经济工作（AA-Briefcase）与复杂 PDF 文档处理（GDP-PDF）。",
+        "聚焦前沿学术难题（HLE Diamond）、前沿物理科研推理（CritPt v2 Hard）、科学计算、真实经济工作（AA-Briefcase）与复杂 PDF 文档处理（GDP-PDF）。",
         [
-            {"key": "hle-diamond", "label": "人类终极考", "primary": True, "format": "pct"},
-            {"key": "critpt-v2-hard", "label": "前沿科研推理", "format": "pct"},
-            {"key": "terminal-bench-science", "label": "科学计算", "format": "pct"},
-            {"key": "aa-briefcase", "label": "办公实战 Elo", "format": "elo"},
-            {"key": "gdp-pdf", "label": "复杂文档解析", "format": "pct"},
-            {"key": "intelligenceIndex", "label": "智力指数", "format": "index"},
+            {"key": "hle-diamond", "label": "前沿学术难题", "primary": True, "format": "pct", "tooltip": "HLE Diamond (Humanity's Last Exam)：博士级跨学科闭卷前沿难题"},
+            {"key": "critpt-v2-hard", "label": "前沿科研推理", "format": "pct", "tooltip": "CritPt v2 Hard：前沿物理与高难度科研推理"},
+            {"key": "terminal-bench-science", "label": "科学计算", "format": "pct", "tooltip": "Terminal-Bench Science：科学计算与实验分析能力"},
+            {"key": "aa-briefcase", "label": "办公实战 Elo", "format": "elo", "tooltip": "AA-Briefcase Elo：真实商业与专业职场任务质量评分"},
+            {"key": "gdp-pdf", "label": "复杂文档解析", "format": "pct", "tooltip": "GDP-PDF：复杂版面与专业 PDF 文档提取推理准确率"},
+            {"key": "intelligenceIndex", "label": "智力指数", "format": "index", "tooltip": "Artificial Analysis Intelligence Index v5 综合智力指数"},
         ],
         filter_fn=lambda m: True,
         sort_key="hle-diamond",
@@ -461,12 +462,12 @@ def build_aa_tracks(aa_raw: list, icon_manifest: dict, today_str: str):
         "知识与抗幻觉",
         "Artificial Analysis Omniscience 专项评测，严格惩罚瞎编胡说，从全知指数、知识准确率、抗幻觉率、长文本推理（AA-LCR）与专业医疗问答多维度评估可靠性。",
         [
-            {"key": "omniscience", "label": "全知指数", "primary": True, "format": "index"},
-            {"key": "omniscience-accuracy", "label": "知识准确率", "format": "pct"},
-            {"key": "omniscience-non-hallucination", "label": "抗幻觉率", "format": "pct"},
-            {"key": "aa-lcr", "label": "长文本推理", "format": "pct"},
-            {"key": "healthbench", "label": "专业医疗", "format": "pct"},
-            {"key": "intelligenceIndex", "label": "智力指数", "format": "index"},
+            {"key": "omniscience", "label": "全知指数", "primary": True, "format": "index", "tooltip": "AA Omniscience Index：综合衡量知识正确率与拒答/抗幻觉能力"},
+            {"key": "omniscience-accuracy", "label": "知识准确率", "format": "pct", "tooltip": "高难度事实问答的直接回答正确率"},
+            {"key": "omniscience-non-hallucination", "label": "抗幻觉率", "format": "pct", "tooltip": "不确定时不编造事实、保持诚实可靠的比例"},
+            {"key": "aa-lcr", "label": "长文本推理", "format": "pct", "tooltip": "AA-LCR：超长上下文跨文档推理能力"},
+            {"key": "healthbench", "label": "专业医疗", "format": "pct", "tooltip": "HealthBench：专业临床与医学咨询准确度"},
+            {"key": "intelligenceIndex", "label": "智力指数", "format": "index", "tooltip": "Artificial Analysis Intelligence Index v5 综合智力指数"},
         ],
         filter_fn=lambda m: True,
         sort_key="omniscience",
@@ -479,13 +480,13 @@ def build_aa_tracks(aa_raw: list, icon_manifest: dict, today_str: str):
         "速度与价格",
         "Artificial Analysis 实测线上 API 吞吐速度（Tokens/s）、首字延迟（TTFT）、每百万 Token 输入/输出定价及单任务平均成本，助你权衡性能与成本。",
         [
-            {"key": "outputSpeed", "label": "输出速度 tok/s", "primary": True, "format": "speed"},
-            {"key": "timeToFirstToken", "label": "首字延迟", "format": "sec", "lowerIsBetter": True},
-            {"key": "priceBlended", "label": "综合价 $/1M", "format": "usd", "lowerIsBetter": True},
-            {"key": "price1mInputTokens", "label": "输入价 $/1M", "format": "usd", "lowerIsBetter": True},
-            {"key": "price1mOutputTokens", "label": "输出价 $/1M", "format": "usd", "lowerIsBetter": True},
-            {"key": "costPerTask", "label": "单任务成本", "format": "usdTask", "lowerIsBetter": True},
-            {"key": "intelligenceIndex", "label": "智力指数", "format": "index"},
+            {"key": "outputSpeed", "label": "输出速度 tok/s", "primary": True, "format": "speed", "tooltip": "实测生成吞吐速度（每秒输出 Token 数，越高越快）"},
+            {"key": "timeToFirstToken", "label": "首字延迟", "format": "sec", "lowerIsBetter": True, "tooltip": "TTFT：从发出请求到收到第一个 Token 的等待时间（越低越快）"},
+            {"key": "priceBlended", "label": "综合价 $/1M", "format": "usd", "lowerIsBetter": True, "tooltip": "每百万 Token 综合价（输入:输出 3:1 加权，越低越便宜）"},
+            {"key": "price1mInputTokens", "label": "输入价 $/1M", "format": "usd", "lowerIsBetter": True, "tooltip": "每百万输入 Token API 价格（美元，越低越便宜）"},
+            {"key": "price1mOutputTokens", "label": "输出价 $/1M", "format": "usd", "lowerIsBetter": True, "tooltip": "每百万输出 Token API 价格（美元，越低越便宜）"},
+            {"key": "costPerTask", "label": "单任务成本", "format": "usdTask", "lowerIsBetter": True, "tooltip": "运行 Intelligence Index 单项任务的平均实际花费（含思考 Token，越低越省钱）"},
+            {"key": "intelligenceIndex", "label": "智力指数", "format": "index", "tooltip": "Artificial Analysis Intelligence Index v5 综合智力指数"},
         ],
         filter_fn=lambda m: (m["scores"].get("outputSpeed") or 0) > 0 and m["scores"].get("intelligenceIndex") is not None,
         sort_key="outputSpeed",
@@ -757,12 +758,28 @@ def main():
         "lmarena_vision",
     ]
 
+    content_blob = json.dumps({"vendors": vendors, "tracks": tracks}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    content_hash = hashlib.sha256(content_blob.encode("utf-8")).hexdigest()[:16]
+
+    force_write = "--force" in sys.argv
+    if not force_write and OUT_PATH.exists():
+        try:
+            prev = json.loads(OUT_PATH.read_text(encoding="utf-8"))
+            if prev.get("meta", {}).get("contentHash") == content_hash:
+                print(f"\n[UNCHANGED] Content hash {content_hash} unchanged; skipping write.")
+                sys.stdout.flush()
+                return
+        except Exception:
+            pass
+
     payload = {
         "meta": {
             "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "scheduleCron": "0 */6 * * *",
-            "scheduleIntervalHours": 6,
-            "scheduleLabel": "每 6 小时由 GitHub Actions 定时自动抓取更新",
+            "contentHash": content_hash,
+            "refreshStrategy": "SWR (Stale-While-Revalidate)",
+            "scheduleCron": "0 * * * *",
+            "scheduleIntervalHours": 1,
+            "scheduleLabel": "前端 SWR 即时渲染 + 后台静默校验；后端每小时轻探针仅在数据变动时发布",
             "trackOrder": [t for t in track_order if t in tracks],
             "sources": [
                 {
@@ -770,7 +787,7 @@ def main():
                     "name": "Artificial Analysis",
                     "url": "https://artificialanalysis.ai/leaderboards/models",
                     "datasetUrl": "https://artificialanalysis.ai/evaluations/artificial-analysis-intelligence-index",
-                    "description": "全球最受认可的独立 AI 模型综合评测机构。涵盖 Intelligence Index v5（含 FrontierCode 2.0、Terminal-Bench 4.0、HLE Diamond、CritPt v2、AA-Briefcase、AutomationBench、Omniscience 抗幻觉），并实测各模型吞吐速度（tok/s）、首字延迟与 API 定价，第一时间收录 Claude Fable 5.2、GPT-6.2 Astra/Sol、Gemini 4 等最新模型。",
+                    "description": "全球权威独立 AI 模型综合评测机构。涵盖 Intelligence Index v5（含 FrontierCode 2.0、Terminal-Bench 4.0、HLE Diamond 前沿学术难题、CritPt v2 科研推理、AA-Briefcase 办公实战、AutomationBench、Omniscience 抗幻觉），并实测各模型吞吐速度（tok/s）、首字延迟与 API 定价。",
                     "publishDate": today_str,
                 },
                 {
@@ -790,7 +807,7 @@ def main():
     OUT_PATH.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     size_kb = OUT_PATH.stat().st_size / 1024
     missing_icons = [vid for vid, v in vendors.items() if not v.get("icon")]
-    print(f"\n[DONE] Wrote {OUT_PATH} ({size_kb:.1f} KB), {len(tracks)} tracks, {len(vendors)} vendors, missing_icons={missing_icons}")
+    print(f"\n[DONE] Wrote {OUT_PATH} ({size_kb:.1f} KB, hash={content_hash}), {len(tracks)} tracks, {len(vendors)} vendors, missing_icons={missing_icons}")
     sys.stdout.flush()
 
 

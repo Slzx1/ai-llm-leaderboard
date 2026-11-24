@@ -1,7 +1,11 @@
 (() => {
   "use strict";
 
-  const DATA_URL = "data/leaderboard.json";
+  const LOCAL_DATA_URL = "data/leaderboard.json";
+  const REMOTE_CDN_URL = "https://raw.githubusercontent.com/Slzx1/ai-llm-leaderboard/main/data/leaderboard.json";
+  const SWR_CACHE_KEY = "modelrank_swr_cache_v2";
+  const SWR_EDGE_KEY = "modelrank_edge_api_url";
+  const SWR_DEDUP_MS = 5 * 60 * 1000; // 5 min minimum interval between passive focus/online revalidations
   const REPO_URL = "https://github.com/Slzx1/ai-llm-leaderboard";
   const COMPARE_COLORS = ["#1a56db", "#0d9488", "#d97706", "#e11d48"];
   const PAGE_STEP = 50;
@@ -19,8 +23,10 @@
     visibleCount: PAGE_STEP,
     compareIds: [],
     activeDrawerModel: null,
-    countdownTimer: null,
-    autoPollTimer: null,
+    revalidating: false,
+    lastRevalidatedAt: 0,
+    swrSource: "",
+    statusTimer: null,
   };
 
   const el = {
@@ -38,6 +44,7 @@
     tableHead: document.getElementById("table-head"),
     tableBody: document.getElementById("table-body"),
     tableFooter: document.getElementById("table-footer"),
+    syncIndicator: document.querySelector(".sync-indicator"),
     syncStatusLabel: document.getElementById("sync-status-label"),
     btnSources: document.getElementById("btn-sources"),
     btnRefresh: document.getElementById("btn-refresh"),
@@ -124,27 +131,14 @@
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
-  function getNextCronUtc(intervalHours = 6) {
-    const now = new Date();
-    return new Date(
-      Date.UTC(
-        now.getUTCFullYear(),
-        now.getUTCMonth(),
-        now.getUTCDate(),
-        Math.floor(now.getUTCHours() / intervalHours) * intervalHours + intervalHours,
-        0,
-        0,
-        0
-      )
-    );
-  }
-
-  function formatCountdown(targetDate) {
-    const diffMs = Math.max(0, targetDate.getTime() - Date.now());
-    const totalMin = Math.floor(diffMs / 60000);
-    const hrs = Math.floor(totalMin / 60);
-    const mins = totalMin % 60;
-    return `${hrs}小时${String(mins).padStart(2, "0")}分`;
+  function formatRelativeTime(iso) {
+    if (!iso) return "";
+    const diffMin = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
+    if (diffMin < 1) return "刚刚";
+    if (diffMin < 60) return `${diffMin} 分钟前`;
+    const hrs = Math.floor(diffMin / 60);
+    if (hrs < 24) return `${hrs} 小时前`;
+    return `${Math.floor(hrs / 24)} 天前`;
   }
 
   let toastTimeout = null;
@@ -210,16 +204,43 @@
   }
 
   /* ========================================================================
-     Data Loading & Live Refresh
+     SWR (Stale-While-Revalidate) Data Engine
+     1. Stale: Immediately hydrates from localStorage cache in <5ms
+     2. Revalidate: Silently checks Edge Worker / GitHub Raw CDN / Same-Origin JSON
+     3. Focus & Online Revalidation: Refreshes automatically when returning to tab
      ======================================================================== */
 
-  async function loadData(bustCache = false) {
-    const url = bustCache ? `${DATA_URL}?t=${Date.now()}` : DATA_URL;
-    const resp = await fetch(url, { cache: bustCache ? "no-store" : "default" });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const json = await resp.json();
-    state.data = json;
+  function getConfiguredEdgeApi() {
+    const param = new URLSearchParams(location.search).get("api");
+    if (param && /^https?:\/\//i.test(param)) {
+      localStorage.setItem(SWR_EDGE_KEY, param);
+      return param;
+    }
+    return localStorage.getItem(SWR_EDGE_KEY) || "";
+  }
 
+  function readSwrCache() {
+    try {
+      const raw = localStorage.getItem(SWR_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (parsed?.tracks && parsed?.meta) return parsed;
+    } catch {
+      // ignore corrupted cache
+    }
+    return null;
+  }
+
+  function writeSwrCache(json) {
+    try {
+      localStorage.setItem(SWR_CACHE_KEY, JSON.stringify(json));
+    } catch {
+      // ignore quota exceeded
+    }
+  }
+
+  function applyPayload(json) {
+    state.data = json;
     const hashTrack = location.hash.replace(/^#/, "");
     const order = json.meta.trackOrder || Object.keys(json.tracks);
     if (hashTrack && json.tracks[hashTrack]) {
@@ -239,33 +260,107 @@
     updateSyncStatus();
   }
 
-  async function manualRefresh() {
-    el.btnRefresh.classList.add("is-loading");
-    el.btnRefresh.disabled = true;
+  async function fetchFromBestEndpoint(force = false) {
+    const isLocalHost = location.hostname === "127.0.0.1" || location.hostname === "localhost";
+    const edgeApi = getConfiguredEdgeApi();
+    const candidates = [];
+
+    if (edgeApi) {
+      const sep = edgeApi.includes("?") ? "&" : "?";
+      candidates.push({
+        label: "Cloudflare Edge SWR",
+        url: force ? `${edgeApi}${sep}force=1&t=${Date.now()}` : edgeApi,
+      });
+    }
+
+    if (isLocalHost) {
+      candidates.push({
+        label: "本地预览快照",
+        url: force ? `${LOCAL_DATA_URL}?t=${Date.now()}` : LOCAL_DATA_URL,
+      });
+    } else {
+      // Fastly CDN for GitHub Raw reflects hourly change-detection commits immediately (5m edge cache)
+      candidates.push({
+        label: "GitHub CDN (SWR)",
+        url: force ? `${REMOTE_CDN_URL}?t=${Date.now()}` : REMOTE_CDN_URL,
+      });
+      candidates.push({
+        label: "Pages 静态快照",
+        url: force ? `${LOCAL_DATA_URL}?t=${Date.now()}` : LOCAL_DATA_URL,
+      });
+    }
+
+    let lastErr = null;
+    for (const c of candidates) {
+      try {
+        const resp = await fetch(c.url, { cache: force ? "no-store" : "default" });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const json = await resp.json();
+        if (json?.tracks && json?.meta) {
+          return { json, source: c.label };
+        }
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    throw lastErr || new Error("所有数据源均不可达");
+  }
+
+  async function revalidateSwr({ force = false, silent = true } = {}) {
+    if (state.revalidating) return;
+    if (!force && Date.now() - state.lastRevalidatedAt < SWR_DEDUP_MS && state.data) {
+      return;
+    }
+
+    state.revalidating = true;
+    el.syncIndicator?.classList.add("is-revalidating");
+    if (!silent) {
+      el.btnRefresh.classList.add("is-loading");
+      el.btnRefresh.disabled = true;
+    }
+    updateSyncStatus();
+
     try {
-      const prevGenerated = state.data?.meta?.generatedAt;
-      await loadData(true);
-      const changed = prevGenerated && prevGenerated !== state.data?.meta?.generatedAt;
-      showToast(
-        changed
-          ? `已同步最新排行快照 (${formatDateTimeLocal(state.data.meta.generatedAt)})`
-          : `当前已是最新快照（每 6 小时由 GitHub Actions 自动同步）`
-      );
+      const prevHash = state.data?.meta?.contentHash || state.data?.meta?.generatedAt;
+      const { json, source } = await fetchFromBestEndpoint(force);
+      state.lastRevalidatedAt = Date.now();
+      state.swrSource = source;
+
+      const nextHash = json.meta?.contentHash || json.meta?.generatedAt;
+      const hasNewer = !prevHash || nextHash !== prevHash;
+
+      if (hasNewer || !state.data) {
+        writeSwrCache(json);
+        applyPayload(json);
+        if (prevHash) {
+          showToast(`SWR 已同步最新排行数据 (${formatDateTimeLocal(json.meta.generatedAt)})`);
+        } else if (!silent) {
+          showToast(`已加载最新排行数据 (${source})`);
+        }
+      } else if (!silent) {
+        showToast(`已是最新排行（数据指纹 ${nextHash.slice(0, 8)} · ${source}）`);
+      }
     } catch (err) {
-      showToast(`刷新失败：${err.message}`);
+      if (!silent || !state.data) {
+        showToast(`后台校验失败：${err.message}`);
+      }
     } finally {
+      state.revalidating = false;
+      el.syncIndicator?.classList.remove("is-revalidating");
       el.btnRefresh.classList.remove("is-loading");
       el.btnRefresh.disabled = false;
+      updateSyncStatus();
     }
   }
 
   function updateSyncStatus() {
+    if (state.revalidating) {
+      el.syncStatusLabel.textContent = "SWR 后台校验更新中...";
+      return;
+    }
     if (!state.data) return;
-    const track = getActiveTrack();
-    const interval = state.data.meta.scheduleIntervalHours || 6;
-    const nextRun = getNextCronUtc(interval);
-    const pub = track?.publishDate || "";
-    el.syncStatusLabel.textContent = `同步日期 ${pub} · 下次自动抓取 ${formatCountdown(nextRun)}`;
+    const gen = state.data.meta.generatedAt;
+    el.syncStatusLabel.textContent = `SWR 已保鲜 · 数据更新于 ${formatRelativeTime(gen)}`;
   }
 
   /* ========================================================================
@@ -558,16 +653,17 @@
 
     cols.forEach((col, idx) => {
       const sortedCls = state.sortKey === col.key ? "sorted" : "";
-      const titleTip = col.lowerIsBetter ? "越低越好（点击按升序排列）" : "越高越好（点击排序）";
+      const dirHint = col.lowerIsBetter ? "（越低越优，点击排序）" : "（越高越优，点击排序）";
+      const titleTip = col.tooltip ? `${col.tooltip}${dirHint}` : dirHint.slice(1, -1);
       if (idx === 0) {
         headCells.push(`
-          <th class="col-primary-score sortable ${sortedCls}" data-sort="${esc(col.key)}" title="${titleTip}">
+          <th class="col-primary-score sortable ${sortedCls}" data-sort="${esc(col.key)}" title="${esc(titleTip)}">
             <span class="th-inner">${esc(col.label)} ${arrow(col.key)}</span>
           </th>
         `);
       } else {
         headCells.push(`
-          <th class="th-right sortable ${sortedCls}" data-sort="${esc(col.key)}" title="${titleTip}">
+          <th class="th-right sortable ${sortedCls}" data-sort="${esc(col.key)}" title="${esc(titleTip)}">
             <span class="th-inner">${esc(col.label)} ${arrow(col.key)}</span>
           </th>
         `);
@@ -693,7 +789,7 @@
 
     const remaining = list.length - slice.length;
     el.tableFooter.innerHTML = `
-      <span>当前显示 <strong>${slice.length}</strong> / ${list.length} 款模型${track.supportsReleaseDedup && state.dedupRelease ? "（已合并同模型档位，取消勾选上方“合并同模型档位”可展开全部推理档位）" : ""} · 点击任意行查看多维档案</span>
+      <span>当前显示 <strong>${slice.length}</strong> / ${list.length} 款模型${track.supportsReleaseDedup && state.dedupRelease ? "（已开启「同模型仅保留最优」，取消勾选可展开同一模型的全部推理深度）" : ""} · 点击任意行查看多维档案</span>
       ${
         remaining > 0
           ? `<div style="display:flex;gap:8px;">
@@ -1164,22 +1260,24 @@
   function openSourcesModal() {
     if (!state.data) return;
     const meta = state.data.meta;
-    const nextRun = getNextCronUtc(meta.scheduleIntervalHours || 6);
+    const hash = meta.contentHash ? meta.contentHash.slice(0, 10) : "—";
+    const edgeApi = getConfiguredEdgeApi();
 
     el.sourcesModalBody.innerHTML = `
       <div class="source-list">
         <div class="source-card">
           <div class="source-card-head">
-            <span class="source-card-title">定时自动抓取机制（GitHub Actions Cron）</span>
-            <span class="mono" style="font-size:.8rem;color:var(--accent)">${esc(meta.scheduleCron)}</span>
+            <span class="source-card-title">SWR (Stale-While-Revalidate) 刷新机制</span>
+            <span class="mono" style="font-size:.8rem;color:var(--accent)">${esc(state.swrSource || "SWR")}</span>
           </div>
           <p>
-            通过 GitHub Actions 每 <strong>${meta.scheduleIntervalHours || 6} 小时</strong> 自动从 Artificial Analysis 与 LMArena 官方公开数据源同步最新排行（并自动拉取新上线厂商的官方 Logo），无须人工维护即刻更新部署。页面打开时每 30 分钟也会静默拉取最新快照。
+            <strong>前端秒开 + 后台保鲜</strong>：打开页面先从本地 SWR 缓存毫秒级渲染，随后后台静默向 CDN / 边缘节点比对数据指纹（<code>${esc(hash)}</code>），切回标签页或网络恢复时也会自动按需校验，有新榜才静默更新。<br/>
+            <strong>后端变更探测</strong>：GitHub Actions 每小时轻量探测上游变动，仅在真实分数或模型列表发生变化时自动发布新快照（无变化零构建）。另已内置 <code>worker/swr-worker.js</code> 支持一键部署 Cloudflare Edge SWR 节点。
           </p>
           <div class="source-card-links">
-            <span>上次同步：<strong>${esc(formatDateTimeLocal(meta.generatedAt))}</strong></span>
-            <span>下次定时运行约 <strong>${esc(formatCountdown(nextRun))}</strong> 后</span>
-            <a href="${REPO_URL}/actions" target="_blank" rel="noopener">查看自动抓取运行日志 ↗</a>
+            <span>最新数据时间：<strong>${esc(formatDateTimeLocal(meta.generatedAt))}</strong></span>
+            ${edgeApi ? `<span>已挂载边缘节点：<code>${esc(edgeApi)}</code></span>` : ""}
+            <a href="${REPO_URL}/actions" target="_blank" rel="noopener">查看探测与部署日志 ↗</a>
           </div>
         </div>
 
@@ -1238,7 +1336,7 @@
       applyTheme(cur === "dark" ? "light" : "dark");
     });
 
-    el.btnRefresh.addEventListener("click", manualRefresh);
+    el.btnRefresh.addEventListener("click", () => revalidateSwr({ force: true, silent: false }));
     el.btnSources.addEventListener("click", openSourcesModal);
 
     el.trackTabs.addEventListener("click", (e) => {
@@ -1368,27 +1466,43 @@
         switchTrack(hashTrack);
       }
     });
+
+    // SWR Focus & Network Reconnect Revalidation
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        revalidateSwr({ force: false, silent: true });
+      }
+    });
+
+    window.addEventListener("online", () => {
+      revalidateSwr({ force: false, silent: true });
+    });
   }
 
   async function boot() {
     initTheme();
     bindEvents();
-    try {
-      await loadData(false);
-    } catch (err) {
+
+    // 1. Stale: Paint immediately from localStorage SWR cache if available
+    const cached = readSwrCache();
+    if (cached) {
+      applyPayload(cached);
+    }
+
+    // 2. While-Revalidate: Silently check latest CDN/Edge snapshot right away
+    await revalidateSwr({ force: false, silent: Boolean(cached) });
+
+    if (!state.data) {
       el.tableBody.innerHTML = `
         <tr>
           <td colspan="12" class="empty-state">
-            加载排行榜数据失败（${esc(err.message)}），请点击右上角“刷新排行”重试。
+            加载排行榜数据失败，请点击右上角「刷新排行」重试。
           </td>
         </tr>
       `;
     }
 
-    state.countdownTimer = setInterval(updateSyncStatus, 60_000);
-    state.autoPollTimer = setInterval(() => {
-      loadData(true).catch(() => {});
-    }, 30 * 60_000);
+    state.statusTimer = setInterval(updateSyncStatus, 60_000);
   }
 
   boot();

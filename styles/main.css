@@ -218,6 +218,17 @@ a:hover {
   border-radius: 50%;
   background: #10b981;
   flex-shrink: 0;
+  transition: background-color 0.2s ease, opacity 0.2s ease;
+}
+
+.sync-indicator.is-revalidating {
+  background: var(--accent);
+  animation: swr-fade 1s ease-in-out infinite;
+}
+
+@keyframes swr-fade {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
 }
 
 .btn-ghost,
