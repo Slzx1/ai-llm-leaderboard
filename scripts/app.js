@@ -54,9 +54,7 @@
     syncStatusLabel: document.getElementById("sync-status-label"),
     btnSources: document.getElementById("btn-sources"),
     btnRefresh: document.getElementById("btn-refresh"),
-    btnTheme: document.getElementById("btn-theme"),
-    iconMoon: document.getElementById("icon-theme-moon"),
-    iconSun: document.getElementById("icon-theme-sun"),
+    themeSwitcher: document.getElementById("theme-switcher"),
     drawerBackdrop: document.getElementById("drawer-backdrop"),
     detailDrawer: document.getElementById("detail-drawer"),
     drawerTitleGroup: document.getElementById("drawer-title-group"),
@@ -193,20 +191,78 @@
   }
 
   /* ========================================================================
-     Theme Management
+     Theme Management (light | dark | auto, persisted safely)
      ======================================================================== */
 
-  function initTheme() {
-    const saved = localStorage.getItem("modelrank_theme");
-    const theme = saved || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-    applyTheme(theme);
+  const THEME_STORAGE_KEY = "modelrank_theme_mode";
+  const themeMediaQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  let currentThemeMode = "auto";
+
+  function safeStorageGet(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
   }
 
-  function applyTheme(theme) {
-    document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("modelrank_theme", theme);
-    el.iconMoon.style.display = theme === "dark" ? "none" : "block";
-    el.iconSun.style.display = theme === "dark" ? "block" : "none";
+  function safeStorageSet(key, val) {
+    try {
+      localStorage.setItem(key, val);
+    } catch {
+      // Ignore storage restrictions in privacy/sandboxed modes
+    }
+  }
+
+  function resolveTheme(mode) {
+    if (mode === "light" || mode === "dark") return mode;
+    return themeMediaQuery && themeMediaQuery.matches ? "dark" : "light";
+  }
+
+  function applyThemeMode(mode, persist = true) {
+    const normalized = mode === "light" || mode === "dark" || mode === "auto" ? mode : "auto";
+    currentThemeMode = normalized;
+    const resolved = resolveTheme(normalized);
+
+    document.documentElement.setAttribute("data-theme", resolved);
+    document.documentElement.setAttribute("data-theme-mode", normalized);
+
+    const meta = document.querySelector('meta[name="color-scheme"]');
+    if (meta) {
+      meta.setAttribute("content", normalized === "auto" ? "light dark" : resolved);
+    }
+
+    if (persist) {
+      safeStorageSet(THEME_STORAGE_KEY, normalized);
+      safeStorageSet("modelrank_theme", normalized);
+    }
+
+    if (el.themeSwitcher) {
+      el.themeSwitcher.querySelectorAll(".theme-btn").forEach((btn) => {
+        const isActive = btn.getAttribute("data-theme-mode") === normalized;
+        btn.classList.toggle("active", isActive);
+        btn.setAttribute("aria-pressed", String(isActive));
+      });
+    }
+  }
+
+  function initTheme() {
+    const saved = safeStorageGet(THEME_STORAGE_KEY) || safeStorageGet("modelrank_theme");
+    const mode = saved === "light" || saved === "dark" || saved === "auto" ? saved : "auto";
+    applyThemeMode(mode, false);
+
+    if (themeMediaQuery) {
+      const onSystemChange = () => {
+        if (currentThemeMode === "auto") {
+          applyThemeMode("auto", false);
+        }
+      };
+      if (typeof themeMediaQuery.addEventListener === "function") {
+        themeMediaQuery.addEventListener("change", onSystemChange);
+      } else if (typeof themeMediaQuery.addListener === "function") {
+        themeMediaQuery.addListener(onSystemChange);
+      }
+    }
   }
 
   /* ========================================================================
@@ -564,7 +620,7 @@
         <div class="pareto-tooltip" id="pareto-tooltip" role="tooltip"></div>
       </div>
       <div class="pareto-foot-note">
-        <span>${esc(cfg.unitNote)} · 点击任意散点或官方图标可打开模型多维详情。</span>
+        <span>${esc(cfg.unitNote)} · 拥挤处未展开的名称悬浮图标即可查看，点击任意点打开详情。</span>
         <span>前沿线随「仅开源 / 厂商 / 同模型仅保留最优」筛选实时重算</span>
       </div>
     `;
@@ -840,6 +896,8 @@
       const py = parseFloat(node.style.top);
       node.addEventListener("mouseenter", () => showPointTooltip(id, px, py));
       node.addEventListener("mouseleave", hideTooltip);
+      node.addEventListener("focus", () => showPointTooltip(id, px, py));
+      node.addEventListener("blur", hideTooltip);
       node.addEventListener("click", () => openModelDrawer(id));
     });
   }
@@ -1836,10 +1894,14 @@
   }
 
   function bindEvents() {
-    el.btnTheme.addEventListener("click", () => {
-      const cur = document.documentElement.getAttribute("data-theme");
-      applyTheme(cur === "dark" ? "light" : "dark");
-    });
+    if (el.themeSwitcher) {
+      el.themeSwitcher.addEventListener("click", (e) => {
+        const btn = e.target.closest(".theme-btn[data-theme-mode]");
+        if (!btn) return;
+        const mode = btn.getAttribute("data-theme-mode");
+        applyThemeMode(mode, true);
+      });
+    }
 
     el.btnRefresh.addEventListener("click", () => revalidateSwr({ force: true, silent: false }));
     el.btnSources.addEventListener("click", openSourcesModal);

@@ -3,12 +3,28 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
   <title>ModelRank · 最新 AI 大模型多维度排行榜 (Artificial Analysis + LMArena 实时同步)</title>
   <meta name="description" content="权威、透明、定时自动更新的 AI 大模型多维度排行榜。以 Artificial Analysis Intelligence Index v5 为核心数据源（覆盖 Claude Fable 5.2、GPT-6.2 Astra/Sol、Gemini 4、Kimi K3.1、Qwen4、DeepSeek 等最新旗舰），辅以 LMArena 盲测榜，提供编程、推理、抗幻觉、速度与 API 价格全景对比。" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles/main.css" />
+  <script>
+    (function () {
+      var mode = "auto";
+      try {
+        var saved = localStorage.getItem("modelrank_theme_mode") || localStorage.getItem("modelrank_theme");
+        if (saved === "light" || saved === "dark" || saved === "auto") mode = saved;
+      } catch (e) {}
+      var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      var resolved = mode === "auto" ? (prefersDark ? "dark" : "light") : mode;
+      document.documentElement.setAttribute("data-theme", resolved);
+      document.documentElement.setAttribute("data-theme-mode", mode);
+      var meta = document.querySelector('meta[name="color-scheme"]');
+      if (meta) meta.setAttribute("content", mode === "auto" ? "light dark" : resolved);
+    })();
+  </script>
+  <link rel="stylesheet" href="styles/main.css?v=5" />
 </head>
 <body>
   <!-- Compact Sticky Masthead -->
@@ -20,7 +36,7 @@
       </div>
 
       <div class="topbar-actions">
-        <button id="btn-sources" class="sync-trigger" type="button" title="查看数据源与定时自动抓取机制">
+        <button id="btn-sources" class="sync-trigger" type="button" title="查看数据源与 SWR 刷新机制">
           <span class="sync-indicator" aria-hidden="true"></span>
           <span id="sync-status-label" class="sync-trigger-text">加载同步状态...</span>
         </button>
@@ -35,15 +51,11 @@
           <span>刷新排行</span>
         </button>
 
-        <button id="btn-theme" class="btn-icon" type="button" aria-label="切换明暗主题" title="切换明暗主题">
-          <svg id="icon-theme-moon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
-          </svg>
-          <svg id="icon-theme-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none" aria-hidden="true">
-            <circle cx="12" cy="12" r="4" />
-            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-          </svg>
-        </button>
+        <div id="theme-switcher" class="theme-switcher" role="group" aria-label="外观主题切换">
+          <button class="theme-btn" data-theme-mode="light" type="button" title="固定使用浅色模式">浅色</button>
+          <button class="theme-btn" data-theme-mode="dark" type="button" title="固定使用深色模式">深色</button>
+          <button class="theme-btn" data-theme-mode="auto" type="button" title="自动跟随系统深浅色设置">自动</button>
+        </div>
       </div>
     </div>
   </header>
@@ -181,6 +193,6 @@
   <!-- Toast -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="scripts/app.js" defer></script>
+  <script src="scripts/app.js?v=5" defer></script>
 </body>
 </html>
