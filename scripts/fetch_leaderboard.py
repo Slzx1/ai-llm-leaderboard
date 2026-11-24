@@ -419,6 +419,26 @@ def build_aa_tracks(aa_raw: list, icon_manifest: dict, today_str: str):
         unit="分",
     )
 
+    tracks["aa_pareto"] = make_track(
+        "aa_pareto",
+        "帕累托性价比前沿 (Pareto Frontier)",
+        "帕累托性价比",
+        "识别同一成本下智力最高、或同一智力下成本最低（及最快速度）的帕累托最优模型前沿。支持在「综合价 $/1M」「单任务实际成本 $/Task」「输出速度 tok/s」间一键切换，并随开源/厂商/推理深度筛选实时重算。",
+        [
+            {"key": "intelligenceIndex", "label": "智力指数", "primary": True, "format": "index", "tooltip": "Artificial Analysis Intelligence Index v5 综合智力指数（纵轴 Y，越高越强）"},
+            {"key": "priceBlended", "label": "综合价 $/1M", "format": "usd", "lowerIsBetter": True, "tooltip": "每百万 Token 综合参考价（输入:输出 3:1 加权，越低越省钱）"},
+            {"key": "costPerTask", "label": "单任务成本", "format": "usdTask", "lowerIsBetter": True, "tooltip": "含推理思考 Token 消耗的单项评测任务平均花费（美元，越低越省钱）"},
+            {"key": "outputSpeed", "label": "速度 tok/s", "format": "speed", "tooltip": "实测 API 输出吞吐速度（每秒生成 Token 数，越高越快）"},
+            {"key": "price1mInputTokens", "label": "输入价 $/1M", "format": "usd", "lowerIsBetter": True, "tooltip": "每百万输入 Token API 价格（美元）"},
+            {"key": "price1mOutputTokens", "label": "输出价 $/1M", "format": "usd", "lowerIsBetter": True, "tooltip": "每百万输出 Token API 价格（美元）"},
+            {"key": "timeToFirstToken", "label": "首字延迟", "format": "sec", "lowerIsBetter": True, "tooltip": "TTFT 首字响应等待时间（秒，越低越快）"},
+        ],
+        filter_fn=lambda m: True,
+        sort_key="intelligenceIndex",
+        unit="分",
+    )
+    tracks["aa_pareto"]["isParetoTrack"] = True
+
     tracks["aa_coding"] = make_track(
         "aa_coding",
         "前沿编程与 Agent 工程榜",
@@ -748,6 +768,7 @@ def main():
 
     track_order = [
         "aa_intelligence",
+        "aa_pareto",
         "aa_coding",
         "aa_reasoning",
         "aa_knowledge",

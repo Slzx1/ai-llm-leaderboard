@@ -9,7 +9,8 @@
 - **开屏直达排行榜**：无冗余介绍页，打开即看完整多维度排行表，默认开启「同模型仅保留最优」（同名模型的不同推理深度如 `max/xhigh/high/medium/low` 仅保留当前排序下最优的一项），取消勾选即可展开全部推理深度。
 - **权威数据源（实时多维度，所有列头均带指标悬停说明）**：
   - **[Artificial Analysis](https://artificialanalysis.ai/leaderboards/models)**（默认核心数据源）：
-    - `综合智力总榜`：Intelligence Index v5 + 前沿编程（FrontierCode 2.0）、终端 Agent（Terminal-Bench 4.0）、前沿学术难题（HLE Diamond）、科研推理（CritPt v2 Hard）、办公实战（AA-Briefcase）、自主自动化（AutomationBench）、输出速度与综合 API 价格。
+    - `综合智力总榜`：Intelligence Index v5 + 前沿编程（FrontierCode 2.0）、终端 Agent（Terminal-Bench 4.0）、前沿学术难题（HLE Diamond）、科研推理（CritPt v2 Hard）、办公实战（AA-Briefcase）、自主自动化（AutomationBench）、输出速度与综合 API 价格；同步标注「帕累托最优」徽标与一键筛选开关。
+    - `帕累托性价比`：交互式帕累托前沿散点图 + 官方厂商图标前沿节点 + 支配模型对比提示，支持「综合价 $/1M」「单任务成本 $/Task」「输出速度 tok/s」与「对数 / 线性」坐标一键切换，随筛选条件动态重算前沿。
     - `编程与 Agent`：前沿编程 2.0、终端工程 4.0、科学终端、自主自动化、长程代码推理。
     - `推理与科研`：前沿学术难题（HLE Diamond）、前沿科研推理（CritPt v2 Hard）、科学计算、办公实战 Elo、复杂文档解析。
     - `知识与抗幻觉`：Omniscience 全知指数、知识准确率、抗幻觉率、长文本推理（AA-LCR）、专业医疗问答。

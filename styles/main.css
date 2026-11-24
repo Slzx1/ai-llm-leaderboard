@@ -1480,6 +1480,301 @@ table.lb-table {
 }
 
 /* ==========================================================================
+   Pareto Frontier Interactive Scatter Plot & Badges
+   ========================================================================== */
+
+.pareto-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 6px;
+  height: 17px;
+  border-radius: 4px;
+  font-size: 0.69rem;
+  font-weight: 650;
+  background: var(--accent-soft-strong);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.pareto-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.pareto-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-hairline);
+  background: var(--bg-subtle);
+}
+
+.pareto-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.pareto-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.81rem;
+  color: var(--text-secondary);
+}
+
+.pareto-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pareto-dot-sample {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  opacity: 0.45;
+}
+
+.pareto-line-sample {
+  width: 16px;
+  height: 2.5px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.pareto-stage {
+  position: relative;
+  width: 100%;
+  height: 410px;
+  user-select: none;
+}
+
+.pareto-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.pareto-grid-line {
+  stroke: var(--border-hairline);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.pareto-axis-line {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.pareto-tick-label {
+  fill: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.pareto-axis-title {
+  fill: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.pareto-envelope {
+  fill: var(--accent);
+  opacity: 0.06;
+}
+
+.pareto-frontier-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.25;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.pareto-dot {
+  fill: var(--text-muted);
+  fill-opacity: 0.42;
+  stroke: var(--bg-surface);
+  stroke-width: 1.2;
+  cursor: pointer;
+  transition: fill-opacity 0.14s ease, fill 0.14s ease;
+}
+
+.pareto-dot.is-open {
+  fill: var(--open-fg);
+  fill-opacity: 0.55;
+}
+
+.pareto-dot:hover,
+.pareto-dot.is-hovered {
+  fill: var(--accent);
+  fill-opacity: 0.95;
+}
+
+.pareto-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.pareto-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  border: 2px solid var(--accent);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  cursor: pointer;
+  pointer-events: auto;
+  z-index: 4;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pareto-node:hover {
+  transform: translate(-50%, -50%) scale(1.18);
+  z-index: 8;
+}
+
+.pareto-node img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+[data-theme="dark"] .pareto-node img[data-mono="true"] {
+  filter: invert(1) brightness(1.08);
+}
+
+.pareto-node-label {
+  position: absolute;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--bg-surface) 90%, transparent);
+  border: 1px solid var(--border-hairline);
+  border-radius: 4px;
+  padding: 2px 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 3;
+  box-shadow: var(--shadow-xs);
+}
+
+.pareto-node-label .mono {
+  color: var(--accent);
+  font-weight: 650;
+  margin-left: 4px;
+}
+
+.pareto-tooltip {
+  position: absolute;
+  z-index: 20;
+  pointer-events: none;
+  min-width: 225px;
+  max-width: 290px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.pareto-tooltip.visible {
+  opacity: 1;
+}
+
+.pareto-tt-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.pareto-tt-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.25;
+}
+
+.pareto-tt-vendor {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.pareto-tt-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px 10px;
+  font-size: 0.78rem;
+  padding: 6px 0;
+  border-top: 1px solid var(--border-hairline);
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.pareto-tt-kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.pareto-tt-k {
+  color: var(--text-muted);
+}
+
+.pareto-tt-v {
+  font-family: var(--font-mono);
+  font-weight: 650;
+  color: var(--text-primary);
+}
+
+.pareto-tt-status {
+  margin-top: 6px;
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.pareto-tt-status strong {
+  color: var(--accent);
+}
+
+.pareto-foot-note {
+  padding: 8px 16px;
+  border-top: 1px solid var(--border-hairline);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+/* ==========================================================================
    Responsive Breakpoints
    ========================================================================== */
 
@@ -1515,6 +1810,13 @@ table.lb-table {
   .toolbar-left,
   .toolbar-right {
     width: 100%;
+  }
+  .pareto-stage {
+    height: 320px;
+  }
+  .pareto-node-label {
+    font-size: 10px;
+    padding: 1px 4px;
   }
   .col-check {
     display: none;

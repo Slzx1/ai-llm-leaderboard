@@ -20,6 +20,9 @@
     vendor: "all",
     dedupRelease: true,
     flagshipOnly: false,
+    paretoOnly: false,
+    paretoMode: "priceBlended", // priceBlended | costPerTask | outputSpeed
+    paretoScale: "log", // log | linear
     visibleCount: PAGE_STEP,
     compareIds: [],
     activeDrawerModel: null,
@@ -37,6 +40,9 @@
     searchClear: document.getElementById("search-clear"),
     vendorSelect: document.getElementById("vendor-select"),
     vendorRibbon: document.getElementById("vendor-ribbon"),
+    paretoOnly: document.getElementById("pareto-only"),
+    paretoOnlyWrap: document.getElementById("pareto-only-wrap"),
+    paretoSection: document.getElementById("pareto-section"),
     dedupRelease: document.getElementById("dedup-release"),
     dedupReleaseWrap: document.getElementById("dedup-release-wrap"),
     flagshipOnly: document.getElementById("flagship-only"),
@@ -364,6 +370,481 @@
   }
 
   /* ========================================================================
+     Pareto Frontier Engine & Interactive Scatter Plot
+     ======================================================================== */
+
+  const PARETO_MODES = {
+    priceBlended: {
+      key: "priceBlended",
+      shortLabel: "综合价 $/1M",
+      title: "智力指数 vs 综合 API 价格 ($/1M Tokens)",
+      axisLabel: "综合 API 价格 ($/1M Tokens，越左越省钱 ←)",
+      lowerIsBetter: true,
+      defaultScale: "log",
+      format: "usd",
+      unitNote: "按输入:输出 3:1 加权，仅统计公开有效 API 报价 (>$0) 模型",
+    },
+    costPerTask: {
+      key: "costPerTask",
+      shortLabel: "单任务成本 $/Task",
+      title: "智力指数 vs 单任务实际成本 ($/Task，含推理思考 Token)",
+      axisLabel: "单任务平均花费 ($/Task，越左越省钱 ←)",
+      lowerIsBetter: true,
+      defaultScale: "log",
+      format: "usdTask",
+      unitNote: "Artificial Analysis 实测单任务总花费（含思考链 Token 消耗，>$0）",
+    },
+    outputSpeed: {
+      key: "outputSpeed",
+      shortLabel: "输出速度 tok/s",
+      title: "智力指数 vs 实测输出速度 (Tokens/s)",
+      axisLabel: "实测输出速度 (Tokens/s，越右越快 →)",
+      lowerIsBetter: false,
+      defaultScale: "linear",
+      format: "speed",
+      unitNote: "同时在「更聪明」与「更快」两个维度上无严格更优替代的模型前沿",
+    },
+  };
+
+  function supportsPareto(track) {
+    return Boolean(track && (track.id === "aa_intelligence" || track.isParetoTrack));
+  }
+
+  function getActiveParetoModeKey(track) {
+    if (track?.isParetoTrack) return state.paretoMode;
+    return "priceBlended";
+  }
+
+  function getModelParetoVal(model, key) {
+    if (model.scores && model.scores[key] != null) return Number(model.scores[key]);
+    if (model[key] != null) return Number(model[key]);
+    return null;
+  }
+
+  function computeParetoFrontier(models, modeKey) {
+    const cfg = PARETO_MODES[modeKey] || PARETO_MODES.priceBlended;
+    const valid = [];
+    for (const m of models) {
+      const y = getModelParetoVal(m, "intelligenceIndex");
+      const x = getModelParetoVal(m, cfg.key);
+      if (y == null || x == null || Number.isNaN(y) || Number.isNaN(x)) continue;
+      if (x <= 0) continue; // Exclude unpriced ($0) or 0-speed models from frontier math
+      valid.push({ model: m, x, y });
+    }
+
+    const frontier = [];
+    const frontierSet = new Set();
+
+    if (cfg.lowerIsBetter) {
+      // Lower X is better, Higher Y is better
+      valid.sort((a, b) => (a.x !== b.x ? a.x - b.x : b.y - a.y));
+      let bestY = -Infinity;
+      let lastX = null;
+      for (const pt of valid) {
+        if (pt.y > bestY + 1e-9 || (lastX !== null && Math.abs(pt.x - lastX) < 1e-9 && Math.abs(pt.y - bestY) < 1e-9)) {
+          frontier.push(pt);
+          frontierSet.add(pt.model.id);
+          if (pt.y > bestY) {
+            bestY = pt.y;
+            lastX = pt.x;
+          }
+        }
+      }
+    } else {
+      // Higher X is better, Higher Y is better
+      valid.sort((a, b) => (a.x !== b.x ? b.x - a.x : b.y - a.y));
+      let bestY = -Infinity;
+      let lastX = null;
+      for (const pt of valid) {
+        if (pt.y > bestY + 1e-9 || (lastX !== null && Math.abs(pt.x - lastX) < 1e-9 && Math.abs(pt.y - bestY) < 1e-9)) {
+          frontier.push(pt);
+          frontierSet.add(pt.model.id);
+          if (pt.y > bestY) {
+            bestY = pt.y;
+            lastX = pt.x;
+          }
+        }
+      }
+      frontier.sort((a, b) => a.x - b.x);
+    }
+
+    // For every dominated point, identify the strongest frontier model dominating it
+    const dominatorMap = new Map();
+    for (const pt of valid) {
+      if (frontierSet.has(pt.model.id)) continue;
+      let bestDom = null;
+      for (const f of frontier) {
+        const xBetterOrEq = cfg.lowerIsBetter ? f.x <= pt.x + 1e-9 : f.x >= pt.x - 1e-9;
+        const yBetterOrEq = f.y >= pt.y - 1e-9;
+        const strictlyBetter = (cfg.lowerIsBetter ? f.x < pt.x - 1e-9 : f.x > pt.x + 1e-9) || f.y > pt.y + 1e-9;
+        if (xBetterOrEq && yBetterOrEq && strictlyBetter) {
+          if (!bestDom || f.y > bestDom.y) bestDom = f;
+        }
+      }
+      if (bestDom) dominatorMap.set(pt.model.id, bestDom);
+    }
+
+    return { cfg, valid, frontier, frontierSet, dominatorMap };
+  }
+
+  function niceLogTicks(minVal, maxVal) {
+    const candidates = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+    const picked = candidates.filter((v) => v >= minVal * 0.92 && v <= maxVal * 1.08);
+    if (picked.length >= 3) return picked;
+    const lo = Math.floor(Math.log10(minVal));
+    const hi = Math.ceil(Math.log10(maxVal));
+    const out = [];
+    for (let p = lo; p <= hi; p++) {
+      const v = Math.pow(10, p);
+      if (v >= minVal * 0.85 && v <= maxVal * 1.15) out.push(v);
+    }
+    return out.length ? out : [minVal, maxVal];
+  }
+
+  function niceLinearTicks(minVal, maxVal, count = 5) {
+    const span = Math.max(1e-6, maxVal - minVal);
+    const rawStep = span / count;
+    const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    const norm = rawStep / mag;
+    const step = (norm <= 1.5 ? 1 : norm <= 3 ? 2 : norm <= 7 ? 5 : 10) * mag;
+    const start = Math.ceil(minVal / step) * step;
+    const ticks = [];
+    for (let v = start; v <= maxVal + step * 0.01; v += step) {
+      ticks.push(Number(v.toFixed(4)));
+    }
+    return ticks;
+  }
+
+  function formatAxisTick(val, fmt) {
+    if (fmt === "usd" || fmt === "usdTask") {
+      if (val >= 10) return `$${Math.round(val)}`;
+      if (val >= 1) return `$${Number(val.toFixed(1))}`;
+      return `$${Number(val.toFixed(2))}`;
+    }
+    if (fmt === "speed") return `${Math.round(val)}`;
+    return `${Math.round(val)}`;
+  }
+
+  function renderParetoPanel(pareto) {
+    const track = getActiveTrack();
+    if (!track.isParetoTrack) {
+      el.paretoSection.style.display = "none";
+      return;
+    }
+    el.paretoSection.style.display = "block";
+
+    const { cfg, valid, frontier, frontierSet, dominatorMap } = pareto;
+    const modeButtons = Object.values(PARETO_MODES)
+      .map(
+        (m) => `
+        <button class="seg-btn ${state.paretoMode === m.key ? "active" : ""}" data-pareto-mode="${esc(m.key)}" type="button">
+          ${esc(m.shortLabel)}
+        </button>
+      `
+      )
+      .join("");
+
+    el.paretoSection.innerHTML = `
+      <div class="pareto-header">
+        <div class="pareto-controls">
+          <div class="segmented" role="group" aria-label="帕累托横轴维度切换">${modeButtons}</div>
+          <div class="segmented" role="group" aria-label="坐标刻度切换">
+            <button class="seg-btn ${state.paretoScale === "log" ? "active" : ""}" data-pareto-scale="log" type="button">对数坐标</button>
+            <button class="seg-btn ${state.paretoScale === "linear" ? "active" : ""}" data-pareto-scale="linear" type="button">线性坐标</button>
+          </div>
+        </div>
+        <div class="pareto-meta">
+          <span class="pareto-legend-item"><span class="pareto-line-sample"></span><strong>${frontier.length}</strong> 款帕累托前沿模型</span>
+          <span class="pareto-legend-item"><span class="pareto-dot-sample"></span>其余 ${Math.max(0, valid.length - frontier.length)} 款候选模型</span>
+        </div>
+      </div>
+      <div class="pareto-stage" id="pareto-stage">
+        <svg class="pareto-svg" id="pareto-svg" aria-label="${esc(cfg.title)}"></svg>
+        <div class="pareto-overlay" id="pareto-overlay"></div>
+        <div class="pareto-tooltip" id="pareto-tooltip" role="tooltip"></div>
+      </div>
+      <div class="pareto-foot-note">
+        <span>${esc(cfg.unitNote)} · 点击任意散点或官方图标可打开模型多维详情。</span>
+        <span>前沿线随「仅开源 / 厂商 / 同模型仅保留最优」筛选实时重算</span>
+      </div>
+    `;
+
+    el.paretoSection.querySelectorAll("[data-pareto-mode]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const nextMode = btn.getAttribute("data-pareto-mode");
+        state.paretoMode = nextMode;
+        state.paretoScale = PARETO_MODES[nextMode].defaultScale;
+        renderAll();
+      });
+    });
+
+    el.paretoSection.querySelectorAll("[data-pareto-scale]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.paretoScale = btn.getAttribute("data-pareto-scale");
+        renderAll();
+      });
+    });
+
+    const stage = document.getElementById("pareto-stage");
+    const svg = document.getElementById("pareto-svg");
+    const overlay = document.getElementById("pareto-overlay");
+    const tooltip = document.getElementById("pareto-tooltip");
+
+    if (valid.length === 0) {
+      overlay.innerHTML = `<div class="empty-state" style="padding-top:150px">当前筛选条件下暂无具备有效「${esc(cfg.shortLabel)}」数据的模型，请放宽筛选条件。</div>`;
+      return;
+    }
+
+    const rect = stage.getBoundingClientRect();
+    const width = Math.max(320, rect.width || 960);
+    const height = Math.max(280, rect.height || 410);
+    const pad = { top: 26, right: 32, bottom: 48, left: 56 };
+    const plotW = Math.max(120, width - pad.left - pad.right);
+    const plotH = Math.max(120, height - pad.top - pad.bottom);
+
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+    // Compute domains with crisp breathing room
+    const xs = valid.map((p) => p.x);
+    const ys = valid.map((p) => p.y);
+    const rawMinX = Math.min(...xs);
+    const rawMaxX = Math.max(...xs);
+    const rawMinY = Math.min(...ys);
+    const rawMaxY = Math.max(...ys);
+
+    const isLog = state.paretoScale === "log";
+    const domMinX = isLog ? rawMinX * 0.82 : Math.max(0, rawMinX - (rawMaxX - rawMinX) * 0.06);
+    const domMaxX = isLog ? rawMaxX * 1.24 : rawMaxX + Math.max(1, rawMaxX - rawMinX) * 0.08;
+    const domMinY = Math.max(0, Math.floor((rawMinY - 4) / 5) * 5);
+    const domMaxY = Math.min(100, Math.ceil((rawMaxY + 4) / 5) * 5);
+
+    const mapX = (x) => {
+      if (isLog) {
+        const lMin = Math.log10(Math.max(1e-4, domMinX));
+        const lMax = Math.log10(Math.max(domMinX * 1.1, domMaxX));
+        return pad.left + ((Math.log10(Math.max(1e-4, x)) - lMin) / Math.max(1e-6, lMax - lMin)) * plotW;
+      }
+      return pad.left + ((x - domMinX) / Math.max(1e-6, domMaxX - domMinX)) * plotW;
+    };
+
+    const mapY = (y) => pad.top + plotH - ((y - domMinY) / Math.max(1e-6, domMaxY - domMinY)) * plotH;
+
+    const xTicks = isLog ? niceLogTicks(domMinX, domMaxX) : niceLinearTicks(domMinX, domMaxX, 5);
+    const yTicks = niceLinearTicks(domMinY, domMaxY, 5);
+
+    const svgParts = [];
+
+    // Gridlines & ticks
+    for (const yv of yTicks) {
+      const py = mapY(yv);
+      if (py < pad.top - 2 || py > pad.top + plotH + 2) continue;
+      svgParts.push(`<line class="pareto-grid-line" x1="${pad.left}" y1="${py.toFixed(1)}" x2="${pad.left + plotW}" y2="${py.toFixed(1)}" />`);
+      svgParts.push(`<text class="pareto-tick-label" x="${pad.left - 8}" y="${(py + 3.5).toFixed(1)}" text-anchor="end">${Math.round(yv)}</text>`);
+    }
+    for (const xv of xTicks) {
+      const px = mapX(xv);
+      if (px < pad.left - 2 || px > pad.left + plotW + 2) continue;
+      svgParts.push(`<line class="pareto-grid-line" x1="${px.toFixed(1)}" y1="${pad.top}" x2="${px.toFixed(1)}" y2="${pad.top + plotH}" />`);
+      svgParts.push(`<text class="pareto-tick-label" x="${px.toFixed(1)}" y="${(pad.top + plotH + 17).toFixed(1)}" text-anchor="middle">${esc(formatAxisTick(xv, cfg.format))}</text>`);
+    }
+
+    // Axes lines & titles
+    svgParts.push(`<line class="pareto-axis-line" x1="${pad.left}" y1="${pad.top + plotH}" x2="${pad.left + plotW}" y2="${pad.top + plotH}" />`);
+    svgParts.push(`<line class="pareto-axis-line" x1="${pad.left}" y1="${pad.top}" x2="${pad.left}" y2="${pad.top + plotH}" />`);
+    svgParts.push(`<text class="pareto-axis-title" x="${(pad.left + plotW / 2).toFixed(1)}" y="${height - 10}" text-anchor="middle">${esc(cfg.axisLabel)}</text>`);
+    svgParts.push(`<text class="pareto-axis-title" transform="translate(16 ${(pad.top + plotH / 2).toFixed(1)}) rotate(-90)" text-anchor="middle">智力指数 (AA Index ↑)</text>`);
+
+    // Pareto frontier shaded envelope + crisp polyline
+    if (frontier.length >= 2) {
+      const pts = frontier.map((p) => `${mapX(p.x).toFixed(1)},${mapY(p.y).toFixed(1)}`);
+      const firstX = mapX(frontier[0].x).toFixed(1);
+      const lastX = mapX(frontier[frontier.length - 1].x).toFixed(1);
+      const baseY = (pad.top + plotH).toFixed(1);
+      const polyPts = `${firstX},${baseY} ${pts.join(" ")} ${lastX},${baseY}`;
+      svgParts.push(`<polygon class="pareto-envelope" points="${polyPts}" />`);
+      svgParts.push(`<polyline class="pareto-frontier-line" points="${pts.join(" ")}" />`);
+    }
+
+    // Non-frontier scatter dots (dimmed slightly when paretoOnly is active)
+    const dotOpacityAttr = state.paretoOnly ? ' style="opacity:0.18"' : "";
+    for (const pt of valid) {
+      if (frontierSet.has(pt.model.id)) continue;
+      const cx = mapX(pt.x).toFixed(1);
+      const cy = mapY(pt.y).toFixed(1);
+      const openCls = pt.model.isOpen ? " is-open" : "";
+      svgParts.push(
+        `<circle class="pareto-dot${openCls}" cx="${cx}" cy="${cy}" r="5.5" data-dot-id="${esc(pt.model.id)}"${dotOpacityAttr} />`
+      );
+    }
+
+    svg.innerHTML = svgParts.join("");
+
+    // HTML Overlay: Official Vendor Logo Badges for Pareto Frontier + Collision-Avoided Labels
+    const placedBoxes = [];
+    const collides = (box) =>
+      placedBoxes.some(
+        (b) => !(box.x2 < b.x1 || box.x1 > b.x2 || box.y2 < b.y1 || box.y1 > b.y2)
+      );
+
+    // Reserve node icon circles first so labels never cover another frontier vendor icon
+    const frontierCoords = frontier.map((pt) => {
+      const px = mapX(pt.x);
+      const py = mapY(pt.y);
+      placedBoxes.push({ x1: px - 15, y1: py - 15, x2: px + 15, y2: py + 15 });
+      return { ...pt, px, py };
+    });
+
+    const overlayParts = [];
+    // Sort label placement priority: highest intelligence models get first pick of label positions
+    const labelOrder = [...frontierCoords].sort((a, b) => b.y - a.y);
+    const labelPlacements = new Map();
+
+    for (const pt of labelOrder) {
+      const shortLbl = pt.model.name.length > 22 ? `${pt.model.name.slice(0, 21)}…` : pt.model.name;
+      const scoreTxt = formatColValue(pt.y, { format: "index" });
+      const estW = Math.min(205, shortLbl.length * 6.8 + scoreTxt.length * 6.8 + 18);
+      const estH = 22;
+
+      const candidates = cfg.lowerIsBetter
+        ? [
+            { x: pt.px - estW - 19, y: pt.py - estH / 2 }, // left
+            { x: pt.px - estW - 8, y: pt.py - estH - 19 }, // top-left
+            { x: pt.px - estW / 2, y: pt.py - estH - 19 }, // above
+            { x: pt.px + 19, y: pt.py - estH / 2 }, // right
+            { x: pt.px - estW - 8, y: pt.py + 19 }, // bottom-left
+            { x: pt.px + 8, y: pt.py + 19 }, // bottom-right
+            { x: pt.px - estW / 2, y: pt.py + 19 }, // below
+          ]
+        : [
+            { x: pt.px + 19, y: pt.py - estH / 2 }, // right
+            { x: pt.px + 8, y: pt.py - estH - 19 }, // top-right
+            { x: pt.px - estW / 2, y: pt.py - estH - 19 }, // above
+            { x: pt.px - estW - 19, y: pt.py - estH / 2 }, // left
+            { x: pt.px - estW - 8, y: pt.py + 19 }, // bottom-left
+            { x: pt.px + 8, y: pt.py + 19 }, // bottom-right
+            { x: pt.px - estW / 2, y: pt.py + 19 }, // below
+          ];
+
+      for (const cand of candidates) {
+        const box = {
+          x1: cand.x - 3,
+          y1: cand.y - 2,
+          x2: cand.x + estW + 3,
+          y2: cand.y + estH + 2,
+        };
+        const inside =
+          box.x1 >= pad.left - 8 &&
+          box.x2 <= width - 6 &&
+          box.y1 >= 4 &&
+          box.y2 <= pad.top + plotH - 2;
+        if (inside && !collides(box)) {
+          placedBoxes.push(box);
+          labelPlacements.set(pt.model.id, { x: cand.x, y: cand.y, shortLbl, scoreTxt });
+          break;
+        }
+      }
+    }
+
+    for (const pt of frontierCoords) {
+      const v = getVendor(pt.model.vendor);
+      const img = v.icon
+        ? `<img src="${esc(v.icon)}" alt="${esc(v.name)}" data-mono="${v.mono ? "true" : "false"}" />`
+        : `<span class="vendor-fallback-text">${esc(v.name.slice(0, 2))}</span>`;
+
+      overlayParts.push(`
+        <button
+          class="pareto-node"
+          type="button"
+          style="left:${pt.px.toFixed(1)}px;top:${pt.py.toFixed(1)}px"
+          data-node-id="${esc(pt.model.id)}"
+          aria-label="${esc(pt.model.name)}（帕累托最优）"
+        >${img}</button>
+      `);
+
+      const lp = labelPlacements.get(pt.model.id);
+      if (lp) {
+        overlayParts.push(`
+          <div class="pareto-node-label" style="left:${lp.x.toFixed(1)}px;top:${lp.y.toFixed(1)}px">
+            ${esc(lp.shortLbl)}<span class="mono">${esc(lp.scoreTxt)}</span>
+          </div>
+        `);
+      }
+    }
+
+    overlay.innerHTML = overlayParts.join("");
+
+    // Interactive Hover Tooltip & Click-to-Drawer for BOTH dots and frontier nodes
+    const ptById = new Map(valid.map((p) => [p.model.id, p]));
+
+    function showPointTooltip(modelId, px, py) {
+      const pt = ptById.get(modelId);
+      if (!pt) return;
+      const m = pt.model;
+      const v = getVendor(m.vendor);
+      const isFrontier = frontierSet.has(m.id);
+      const dom = dominatorMap.get(m.id);
+
+      const priceVal = getModelParetoVal(m, "priceBlended");
+      const taskVal = getModelParetoVal(m, "costPerTask");
+      const speedVal = getModelParetoVal(m, "outputSpeed");
+
+      const statusHtml = isFrontier
+        ? `<strong>★ 帕累托最优前沿</strong> · 当前筛选下同档位无更优替代`
+        : dom
+          ? `同档位更优参考：<strong>${esc(dom.model.name)}</strong>（智力 ${formatColValue(dom.y, { format: "index" })} / ${formatColValue(dom.x, { format: cfg.format })}）`
+          : `非前沿候选模型`;
+
+      tooltip.innerHTML = `
+        <div class="pareto-tt-head">
+          ${renderVendorIconHtml(m.vendor, "sm")}
+          <div>
+            <div class="pareto-tt-name">${esc(m.name)}</div>
+            <div class="pareto-tt-vendor">${esc(v.name)} · ${m.isOpen ? "开源权重" : "闭源商业"}</div>
+          </div>
+        </div>
+        <div class="pareto-tt-metrics">
+          <div class="pareto-tt-kv"><span class="pareto-tt-k">智力指数</span><span class="pareto-tt-v">${formatColValue(pt.y, { format: "index" })}</span></div>
+          <div class="pareto-tt-kv"><span class="pareto-tt-k">综合价</span><span class="pareto-tt-v">${priceVal != null ? formatColValue(priceVal, { format: "usd" }) : "—"}</span></div>
+          <div class="pareto-tt-kv"><span class="pareto-tt-k">单任务</span><span class="pareto-tt-v">${taskVal != null ? formatColValue(taskVal, { format: "usdTask" }) : "—"}</span></div>
+          <div class="pareto-tt-kv"><span class="pareto-tt-k">速度</span><span class="pareto-tt-v">${speedVal != null ? `${Math.round(speedVal)} t/s` : "—"}</span></div>
+        </div>
+        <div class="pareto-tt-status">${statusHtml}</div>
+      `;
+
+      // Position smartly inside stage bounds
+      const ttW = 265;
+      const ttH = 152;
+      const left = px + 18 + ttW > width ? Math.max(8, px - ttW - 18) : px + 18;
+      const top = Math.max(8, Math.min(height - ttH - 8, py - ttH / 2));
+      tooltip.style.left = `${left.toFixed(1)}px`;
+      tooltip.style.top = `${top.toFixed(1)}px`;
+      tooltip.classList.add("visible");
+    }
+
+    function hideTooltip() {
+      tooltip.classList.remove("visible");
+    }
+
+    svg.querySelectorAll("[data-dot-id]").forEach((dot) => {
+      const id = dot.getAttribute("data-dot-id");
+      const cx = Number(dot.getAttribute("cx"));
+      const cy = Number(dot.getAttribute("cy"));
+      dot.addEventListener("mouseenter", () => showPointTooltip(id, cx, cy));
+      dot.addEventListener("mouseleave", hideTooltip);
+      dot.addEventListener("click", () => openModelDrawer(id));
+    });
+
+    overlay.querySelectorAll("[data-node-id]").forEach((node) => {
+      const id = node.getAttribute("data-node-id");
+      const px = parseFloat(node.style.left);
+      const py = parseFloat(node.style.top);
+      node.addEventListener("mouseenter", () => showPointTooltip(id, px, py));
+      node.addEventListener("mouseleave", hideTooltip);
+      node.addEventListener("click", () => openModelDrawer(id));
+    });
+  }
+
+  /* ========================================================================
      Track, Sorting & Filtering Logic
      ======================================================================== */
 
@@ -371,7 +852,7 @@
     return state.data.tracks[state.trackId];
   }
 
-  function getFilteredAndSortedModels() {
+  function getFilteredAndSortedModels(ignoreParetoFilter = false) {
     const track = getActiveTrack();
     const q = state.search.trim().toLowerCase();
 
@@ -422,6 +903,11 @@
       });
     }
 
+    if (!ignoreParetoFilter && supportsPareto(track) && state.paretoOnly) {
+      const pareto = computeParetoFrontier(list, getActiveParetoModeKey(track));
+      list = list.filter((m) => pareto.frontierSet.has(m.id));
+    }
+
     return list;
   }
 
@@ -454,7 +940,9 @@
 
   function renderAll() {
     const track = getActiveTrack();
+    const canPareto = supportsPareto(track);
     el.dedupReleaseWrap.style.display = track.supportsReleaseDedup ? "inline-flex" : "none";
+    el.paretoOnlyWrap.style.display = canPareto ? "inline-flex" : "none";
     renderTrackTabs();
     renderSummaryStrip();
     renderTrackDesc();
@@ -635,7 +1123,22 @@
 
   function renderTable() {
     const track = getActiveTrack();
-    const list = getFilteredAndSortedModels();
+    const baseList = getFilteredAndSortedModels(true);
+    const pareto = supportsPareto(track)
+      ? computeParetoFrontier(baseList, getActiveParetoModeKey(track))
+      : null;
+
+    if (track.isParetoTrack && pareto) {
+      renderParetoPanel(pareto);
+    } else {
+      el.paretoSection.style.display = "none";
+    }
+
+    const list =
+      state.paretoOnly && pareto
+        ? baseList.filter((m) => pareto.frontierSet.has(m.id))
+        : baseList;
+
     const stats = computeColumnStats(track, list);
     const hasVotes = track.models.some((m) => m.votes != null);
     const cols = track.columns;
@@ -705,6 +1208,7 @@
           displayRank === 1 ? "rank-1" : displayRank === 2 ? "rank-2" : displayRank === 3 ? "rank-3" : "";
         const v = getVendor(m.vendor);
         const isCompared = state.compareIds.includes(m.id);
+        const isParetoOpt = Boolean(pareto && pareto.frontierSet.has(m.id));
 
         const pVal = m.scores?.[primaryCol.key];
         let pct = 0;
@@ -764,6 +1268,7 @@
                   <span class="model-sub">
                     <span>${esc(v.name)}</span>
                     <span class="lic-tag ${m.isOpen ? "open" : "prop"}">${m.isOpen ? "开源" : "闭源"}</span>
+                    ${isParetoOpt ? `<span class="pareto-badge" title="当前筛选条件下位于帕累托最优前沿">帕累托最优</span>` : ""}
                     ${m.contextLength ? `<span class="mono">${formatContext(m.contextLength)}</span>` : ""}
                   </span>
                 </div>
@@ -1386,6 +1891,13 @@
       renderTable();
     });
 
+    el.paretoOnly.addEventListener("change", () => {
+      state.paretoOnly = el.paretoOnly.checked;
+      el.paretoOnlyWrap.classList.toggle("active", state.paretoOnly);
+      state.visibleCount = PAGE_STEP;
+      renderTable();
+    });
+
     el.dedupRelease.addEventListener("change", () => {
       state.dedupRelease = el.dedupRelease.checked;
       el.dedupReleaseWrap.classList.toggle("active", state.dedupRelease);
@@ -1399,6 +1911,13 @@
       el.flagshipWrap.classList.toggle("active", state.flagshipOnly);
       state.visibleCount = PAGE_STEP;
       renderTable();
+    });
+
+    let resizeTimer = null;
+    window.addEventListener("resize", () => {
+      if (!state.data || !getActiveTrack().isParetoTrack) return;
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => renderTable(), 120);
     });
 
     el.tableHead.addEventListener("click", (e) => {
