@@ -273,5 +273,140 @@
     "icon": "assets/icons/unisound.png",
     "mono": false,
     "source": "https://www.google.com/s2/favicons?domain=unisound.com&sz=128"
+  },
+  "chinamobile": {
+    "icon": "assets/icons/chinamobile.png",
+    "mono": false,
+    "source": "https://artificialanalysis.ai/img/logos/china-mobile.png"
+  },
+  "apodex": {
+    "icon": "assets/icons/apodex.svg",
+    "mono": true,
+    "source": "https://artificialanalysis.ai/img/logos/apodex.svg"
+  },
+  "institute-of-foundation-models": {
+    "icon": "assets/icons/institute-of-foundation-models.svg",
+    "mono": false,
+    "source": "https://artificialanalysis.ai/img/logos/ifm.svg"
+  },
+  "lg": {
+    "icon": "assets/icons/lg.png",
+    "mono": false,
+    "source": "https://artificialanalysis.ai/img/logos/lg.png"
+  },
+  "nous": {
+    "icon": "assets/icons/nous.jpg",
+    "mono": false,
+    "source": "https://artificialanalysis.ai/img/logos/nousresearch.jpg"
+  },
+  "liquidai": {
+    "icon": "assets/icons/liquidai.svg",
+    "mono": true,
+    "source": "https://artificialanalysis.ai/img/logos/liquidai.svg"
+  },
+  "ai9stars": {
+    "icon": "assets/icons/ai9stars.svg",
+    "mono": false,
+    "source": "https://artificialanalysis.ai/img/logos/ai9stars.svg"
+  },
+  "naver": {
+    "icon": "assets/icons/naver.webp",
+    "mono": false,
+    "source": "https://artificialanalysis.ai/img/logos/naver.webp"
+  },
+  "multiverse-computing": {
+    "icon": "assets/icons/multiverse-computing.svg",
+    "mono": false,
+    "source": "https://artificialanalysis.ai/img/logos/multiversecomputing.svg"
+  },
+  "primeintellect": {
+    "icon": "assets/icons/primeintellect.svg",
+    "mono": true,
+    "source": "https://artificialanalysis.ai/img/logos/prime-intellect.svg"
+  },
+  "nex-agi": {
+    "icon": "assets/icons/nex-agi.svg",
+    "mono": false,
+    "source": "https://artificialanalysis.ai/img/logos/nex.svg"
+  },
+  "openbmb": {
+    "icon": "assets/icons/openbmb.svg",
+    "mono": false,
+    "source": "https://artificialanalysis.ai/img/logos/openbmb.svg"
+  },
+  "sarvam": {
+    "icon": "assets/icons/sarvam.svg",
+    "mono": false,
+    "source": "https://artificialanalysis.ai/img/logos/sarvam.svg"
+  },
+  "swissai": {
+    "icon": "assets/icons/swissai.png",
+    "mono": false,
+    "source": "https://artificialanalysis.ai/img/logos/swiss-ai-initiative.png"
+  },
+  "nanbeige": {
+    "icon": "assets/icons/nanbeige.png",
+    "mono": false,
+    "source": "https://artificialanalysis.ai/img/logos/nanbeige.png"
+  },
+  "joy-future-academy": {
+    "icon": "assets/icons/joy-future-academy.svg",
+    "mono": false,
+    "source": "https://artificialanalysis.ai/img/logos/joy-ai.svg"
+  },
+  "trillion-labs": {
+    "icon": "assets/icons/trillion-labs.svg",
+    "mono": true,
+    "source": "https://artificialanalysis.ai/img/logos/trillionlabs.svg"
+  },
+  "motif-technologies": {
+    "icon": "assets/icons/motif-technologies.svg",
+    "mono": true,
+    "source": "https://artificialanalysis.ai/img/logos/motif.svg"
+  },
+  "ai21": {
+    "icon": "assets/icons/ai21.svg",
+    "mono": true,
+    "source": "https://artificialanalysis.ai/img/logos/ai21.svg"
+  },
+  "celeris": {
+    "icon": "assets/icons/celeris.svg",
+    "mono": true,
+    "source": "https://artificialanalysis.ai/img/logos/celeris.svg"
+  },
+  "sktelecom": {
+    "icon": "assets/icons/sktelecom.svg",
+    "mono": false,
+    "source": "https://artificialanalysis.ai/img/logos/sktelecom.svg"
+  },
+  "servicenow": {
+    "icon": "assets/icons/servicenow.svg",
+    "mono": true,
+    "source": "https://artificialanalysis.ai/img/logos/servicenow.svg"
+  },
+  "tii": {
+    "icon": "assets/icons/tii.svg",
+    "mono": true,
+    "source": "https://artificialanalysis.ai/img/logos/tii.svg"
+  },
+  "sapiens-ai": {
+    "icon": "assets/icons/sapiens-ai.svg",
+    "mono": false,
+    "source": "https://artificialanalysis.ai/img/logos/sapiens.svg"
+  },
+  "reka": {
+    "icon": "assets/icons/reka.svg",
+    "mono": true,
+    "source": "https://artificialanalysis.ai/img/logos/reka.svg"
+  },
+  "koreatelecom": {
+    "icon": "assets/icons/koreatelecom.png",
+    "mono": false,
+    "source": "https://artificialanalysis.ai/img/logos/korea-telecom.png"
+  },
+  "deepcogito": {
+    "icon": "assets/icons/deepcogito.png",
+    "mono": false,
+    "source": "https://artificialanalysis.ai/img/logos/deepcogito.png"
   }
 }

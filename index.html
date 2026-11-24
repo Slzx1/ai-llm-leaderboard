@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ModelRank · 最新 AI 大模型多维度排行榜 (LMArena + LiveBench 实时同步)</title>
-  <meta name="description" content="权威、透明、定时自动更新的 AI 大模型多维度排行榜。聚合 LMArena 官方盲测 Elo（综合文本、编程、数学、中文、Web开发、多模态视觉、Agent、搜索、文生图/视频）与 LiveBench 客观无污染评测基准，支持多模型雷达对比。" />
+  <title>ModelRank · 最新 AI 大模型多维度排行榜 (Artificial Analysis + LMArena 实时同步)</title>
+  <meta name="description" content="权威、透明、定时自动更新的 AI 大模型多维度排行榜。以 Artificial Analysis Intelligence Index v5 为核心数据源（覆盖 Claude Fable 5.2、GPT-6.2 Astra/Sol、Gemini 4、Kimi K3.1、Qwen4、DeepSeek 等最新旗舰），辅以 LMArena 盲测榜，提供编程、推理、抗幻觉、速度与 API 价格全景对比。" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -16,7 +16,7 @@
     <div class="topbar-inner">
       <div class="brand">
         <h1 class="brand-title">AI 大模型排行榜</h1>
-        <span class="brand-sub">LMArena · LiveBench 多维度权威榜单</span>
+        <span class="brand-sub">Artificial Analysis · LMArena 多维度权威榜单</span>
       </div>
 
       <div class="topbar-actions">
@@ -25,7 +25,7 @@
           <span id="sync-status-label" class="sync-trigger-text">加载同步状态...</span>
         </button>
 
-        <button id="btn-refresh" class="btn-ghost" type="button" title="从服务器及官方 API 立即检查最新排行">
+        <button id="btn-refresh" class="btn-ghost" type="button" title="从服务器立即拉取最新排行快照">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
             <path d="M3 3v5h5" />
@@ -69,7 +69,7 @@
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.3-4.3" />
           </svg>
-          <input id="search-input" class="search-input" type="search" placeholder="搜索模型名或厂商 (如 Gemini, Claude, DeepSeek)..." autocomplete="off" />
+          <input id="search-input" class="search-input" type="search" placeholder="搜索模型或厂商 (如 GPT-6.2, Fable, Gemini 4)..." autocomplete="off" />
           <button id="search-clear" class="search-clear" type="button" aria-label="清空搜索">×</button>
         </div>
 
@@ -85,6 +85,11 @@
       </div>
 
       <div class="toolbar-right">
+        <label id="dedup-release-wrap" class="toggle-pill active" title="同一模型的多个思考档位（max/xhigh/high/medium/low）只展示当前排序下的最佳档位">
+          <input id="dedup-release" type="checkbox" checked />
+          <span>合并同模型档位</span>
+        </label>
+
         <label id="flagship-toggle-wrap" class="toggle-pill" title="每个厂商只保留当前排序维度下排名最高的一款旗舰模型">
           <input id="flagship-only" type="checkbox" />
           <span>仅看各厂商最强</span>
@@ -102,7 +107,7 @@
           <thead id="table-head"></thead>
           <tbody id="table-body">
             <tr>
-              <td colspan="10" class="empty-state">正在加载最新权威排行榜数据...</td>
+              <td colspan="12" class="empty-state">正在加载最新权威排行榜数据...</td>
             </tr>
           </tbody>
         </table>
@@ -114,12 +119,11 @@
   <!-- Minimal Transparent Provenance Footer -->
   <footer class="site-footer">
     <div>
-      数据完全来自公开权威评测平台，厂商 Logo 全部采用官方开源图标资产（无自绘图标）。由 GitHub Actions 每 6 小时自动定时抓取并重新部署。
+      数据完全来自 Artificial Analysis 与 LMArena 官方公开评测，厂商图标 100% 为官方原版资产（无自绘图标）。由 GitHub Actions 每 6 小时自动抓取并重新部署。
     </div>
     <div class="footer-links">
+      <a href="https://artificialanalysis.ai/leaderboards/models" target="_blank" rel="noopener">Artificial Analysis 榜单</a>
       <a href="https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset" target="_blank" rel="noopener">LMArena 官方数据集</a>
-      <a href="https://livebench.ai/" target="_blank" rel="noopener">LiveBench 官网</a>
-      <a href="https://openrouter.ai/models" target="_blank" rel="noopener">OpenRouter API</a>
       <a href="https://github.com/Slzx1/ai-llm-leaderboard" target="_blank" rel="noopener">GitHub 源码与定时任务</a>
     </div>
   </footer>
