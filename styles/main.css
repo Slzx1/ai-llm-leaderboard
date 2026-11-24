@@ -654,11 +654,27 @@ a:hover {
   gap: 6px;
   overflow-x: auto;
   padding: 2px 0 10px;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.vendor-ribbon.is-expanded {
+  flex-wrap: wrap;
+  overflow-x: visible;
 }
 
 .vendor-ribbon::-webkit-scrollbar {
-  display: none;
+  height: 5px;
+}
+
+.vendor-ribbon::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 99px;
+}
+
+.vendor-chip-toggle {
+  border-style: dashed;
+  color: var(--accent);
 }
 
 .vendor-chip {

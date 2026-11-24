@@ -23,6 +23,7 @@
     paretoOnly: false,
     paretoMode: "priceBlended", // priceBlended | costPerTask | outputSpeed
     paretoScale: "log", // log | linear
+    vendorRibbonExpanded: false,
     visibleCount: PAGE_STEP,
     compareIds: [],
     activeDrawerModel: null,
@@ -992,6 +993,38 @@
     return stats;
   }
 
+  function computeAbsoluteBarPercent(val, col, globalStats) {
+    if (val == null || Number.isNaN(val)) return 0;
+    const num = Number(val);
+    const fmt = col?.format || "index";
+
+    // Bounded 0-100 absolute scales (AA Intelligence Index, FrontierCode %, HLE %, Omniscience, Agent)
+    if (fmt === "pct" || fmt === "index") {
+      return Math.max(0, Math.min(100, num));
+    }
+
+    // Elo scale (e.g. LMArena / AA-Briefcase): anchored to fixed absolute ceiling (0 .. >=2000)
+    if (fmt === "elo") {
+      const ceil = Math.max(2000, Math.ceil((globalStats?.max || 1800) / 200) * 200);
+      return Math.max(0, Math.min(100, (num / ceil) * 100));
+    }
+
+    // Output speed (tokens/s): proportional from 0 to rounded global ceiling
+    if (fmt === "speed") {
+      const ceil = Math.max(100, Math.ceil((globalStats?.max || 500) / 100) * 100);
+      return Math.max(0, Math.min(100, (num / ceil) * 100));
+    }
+
+    // Lower-is-better unbounded metrics (price, latency, costPerTask): inverse against fixed track global max
+    if (col?.lowerIsBetter) {
+      const hi = Math.max(0.01, globalStats?.max || num || 1);
+      return Math.max(4, Math.min(100, (1 - num / hi) * 100));
+    }
+
+    const hi = Math.max(1, globalStats?.max || 100);
+    return Math.max(0, Math.min(100, (num / hi) * 100));
+  }
+
   /* ========================================================================
      Rendering
      ======================================================================== */
@@ -1128,20 +1161,30 @@
 
   function renderVendorControls() {
     const track = getActiveTrack();
+    const eligibleModels = track.models.filter((m) => {
+      if (state.license === "open" && !m.isOpen) return false;
+      if (state.license === "closed" && m.isOpen) return false;
+      return true;
+    });
+
     const counts = new Map();
     const seenPerVendor = new Map();
-    for (const m of track.models) {
+    const bestRankPerVendor = new Map();
+    for (const m of eligibleModels) {
       const k = track.supportsReleaseDedup && state.dedupRelease ? (m.releaseSlug || m.name) : m.id;
       if (!seenPerVendor.has(m.vendor)) seenPerVendor.set(m.vendor, new Set());
       seenPerVendor.get(m.vendor).add(k);
+      if (!bestRankPerVendor.has(m.vendor) || m.rank < bestRankPerVendor.get(m.vendor)) {
+        bestRankPerVendor.set(m.vendor, m.rank);
+      }
     }
     for (const [vid, set] of seenPerVendor.entries()) {
       counts.set(vid, set.size);
     }
 
     const sortedVendors = [...counts.entries()].sort((a, b) => {
-      const bestA = track.models.find((m) => m.vendor === a[0])?.rank ?? 999;
-      const bestB = track.models.find((m) => m.vendor === b[0])?.rank ?? 999;
+      const bestA = bestRankPerVendor.get(a[0]) ?? 9999;
+      const bestB = bestRankPerVendor.get(b[0]) ?? 9999;
       return bestA - bestB;
     });
 
@@ -1159,10 +1202,19 @@
         })
         .join("");
 
-    const topChips = sortedVendors.slice(0, 14);
+    // Render EVERY vendor present in the current fetched leaderboard dynamically (no hardcoded limit)
+    el.vendorRibbon.classList.toggle("is-expanded", state.vendorRibbonExpanded);
+    const toggleBtn =
+      sortedVendors.length > 10
+        ? `<button class="vendor-chip vendor-chip-toggle" data-toggle-vendors="1" type="button" title="${state.vendorRibbonExpanded ? "收起为单行横向滚动" : "换行展开查看当前榜单全部厂商"}">
+             ${state.vendorRibbonExpanded ? "收起" : `展开全部 (${sortedVendors.length})`}
+           </button>`
+        : "";
+
     el.vendorRibbon.innerHTML =
-      `<button class="vendor-chip ${state.vendor === "all" ? "active" : ""}" data-vendor="all" type="button">全部厂商</button>` +
-      topChips
+      `<button class="vendor-chip ${state.vendor === "all" ? "active" : ""}" data-vendor="all" type="button">全部厂商 <span class="mono" style="opacity:.6;font-size:.74rem">${sortedVendors.length}</span></button>` +
+      toggleBtn +
+      sortedVendors
         .map(([vid, cnt]) => {
           const v = getVendor(vid);
           const img = v.icon
@@ -1198,6 +1250,7 @@
         : baseList;
 
     const stats = computeColumnStats(track, list);
+    const globalStats = computeColumnStats(track, track.models);
     const hasVotes = track.models.some((m) => m.votes != null);
     const cols = track.columns;
 
@@ -1256,8 +1309,7 @@
 
     const slice = list.slice(0, state.visibleCount);
     const primaryCol = cols[0];
-    const pStat = stats[primaryCol.key];
-    const pSpan = Math.max(0.01, pStat.max - pStat.min);
+    const pGlobal = globalStats[primaryCol.key];
 
     el.tableBody.innerHTML = slice
       .map((m, i) => {
@@ -1269,13 +1321,7 @@
         const isParetoOpt = Boolean(pareto && pareto.frontierSet.has(m.id));
 
         const pVal = m.scores?.[primaryCol.key];
-        let pct = 0;
-        if (pVal != null) {
-          const rawPct = primaryCol.lowerIsBetter
-            ? ((pStat.max - pVal) / pSpan) * 100
-            : ((pVal - pStat.min) / pSpan) * 100;
-          pct = Math.max(6, Math.min(100, rawPct));
-        }
+        const pct = computeAbsoluteBarPercent(pVal, primaryCol, pGlobal);
 
         const subCells = cols
           .slice(1)
@@ -1445,19 +1491,11 @@
       }
     `;
 
-    // Dimension breakdown bars
+    // Dimension breakdown bars (absolute scale)
     const barsHtml = track.columns
       .map((col) => {
         const val = model.scores?.[col.key];
-        const st = stats[col.key];
-        const span = Math.max(0.01, st.max - st.min);
-        let pct = 0;
-        if (val != null) {
-          const raw = col.lowerIsBetter
-            ? ((st.max - val) / span) * 100
-            : ((val - st.min) / span) * 100;
-          pct = Math.max(5, Math.min(100, raw));
-        }
+        const pct = computeAbsoluteBarPercent(val, col, stats[col.key]);
         return `
           <div class="dim-bar-row">
             <div class="dim-bar-head">
@@ -1933,6 +1971,7 @@
         btn.classList.add("active");
         state.license = btn.getAttribute("data-license");
         state.visibleCount = PAGE_STEP;
+        renderVendorControls();
         renderTable();
       });
     });
@@ -1945,6 +1984,12 @@
     });
 
     el.vendorRibbon.addEventListener("click", (e) => {
+      const toggle = e.target.closest("[data-toggle-vendors]");
+      if (toggle) {
+        state.vendorRibbonExpanded = !state.vendorRibbonExpanded;
+        renderVendorControls();
+        return;
+      }
       const chip = e.target.closest("[data-vendor]");
       if (!chip) return;
       state.vendor = chip.getAttribute("data-vendor");
