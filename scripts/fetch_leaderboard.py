@@ -400,11 +400,11 @@ def build_aa_tracks(aa_raw: list, icon_manifest: dict, today_str: str):
 
     tracks["aa_intelligence"] = make_track(
         "aa_intelligence",
-        "综合智力总榜 (AA Intelligence Index v5)",
+        "综合智力总榜 (AA Intelligence Index)",
         "综合智力总榜",
-        "Artificial Analysis Intelligence Index v5.0.1 权威独立基准，涵盖 Claude Fable 5.2、GPT-6.2 Astra/Sol、Gemini 4 等最新旗舰，同表呈现编程、终端 Agent、前沿学术难题、科研推理、办公实战、速度与价格。",
+        "Artificial Analysis Intelligence Index 独立多维基准，实时同步前沿旗舰模型，同表呈现编程、终端 Agent、前沿学术难题、科研推理、办公实战、速度与价格。",
         [
-            {"key": "intelligenceIndex", "label": "智力指数", "primary": True, "format": "index", "tooltip": "Artificial Analysis Intelligence Index v5 综合智力指数（0-100），聚合 9 项高难度独立基准"},
+            {"key": "intelligenceIndex", "label": "智力指数", "primary": True, "format": "index", "tooltip": "Artificial Analysis Intelligence Index 综合智力指数（0-100），聚合多项高难度独立基准"},
             {"key": "frontiercode-2-0", "label": "前沿编程", "format": "pct", "tooltip": "FrontierCode 2.0：复杂算法与真实软件工程编码能力评测"},
             {"key": "terminalbench-4-0", "label": "终端 Agent", "format": "pct", "tooltip": "Terminal-Bench 4.0：真实 Linux 终端环境下的自主排错与工程任务完成率"},
             {"key": "hle-diamond", "label": "前沿学术难题", "format": "pct", "tooltip": "HLE Diamond (Humanity's Last Exam)：博士级跨学科前沿学术难题，测试顶尖深度推理与知识上限"},
@@ -418,6 +418,19 @@ def build_aa_tracks(aa_raw: list, icon_manifest: dict, today_str: str):
         sort_key="intelligenceIndex",
         unit="分",
     )
+    # Dynamically enrich description with live top-3 unique releases (never goes stale)
+    seen_top = []
+    for m in tracks["aa_intelligence"]["models"]:
+        rn = m.get("releaseName") or m["name"]
+        if rn not in seen_top:
+            seen_top.append(rn)
+        if len(seen_top) == 3:
+            break
+    if seen_top:
+        tracks["aa_intelligence"]["description"] = (
+            f"Artificial Analysis Intelligence Index 独立多维基准，当前领跑包括 {'、'.join(seen_top)} 等模型，"
+            "同表呈现编程、终端 Agent、前沿学术难题、科研推理、办公实战、速度与价格。"
+        )
 
     tracks["aa_pareto"] = make_track(
         "aa_pareto",
@@ -649,6 +662,12 @@ def build_lmarena_agent_track():
     columns = [{"key": "overall", "label": "Agent 综合", "primary": True, "format": "index"}] + [
         {"key": key, "label": label, "format": fmt} for key, _c, _f, _s, label, fmt in sub_configs
     ]
+    top_agent_names = [m["name"] for m in models[:3]]
+    agent_desc = (
+        f"LMArena Agent Arena 真实环境人类盲测排行（当前前列包括 {'、'.join(top_agent_names)}），衡量真实自主任务完成度与工具使用效率。"
+        if top_agent_names
+        else "LMArena Agent Arena 真实环境人类盲测排行，衡量真实自主任务完成度与工具使用效率。"
+    )
     print(f"[LMArena:agent] Built {len(models)} models (date={pub_date})")
     return {
         "id": "lmarena_agent",
@@ -659,7 +678,7 @@ def build_lmarena_agent_track():
         "scoreLabel": "Agent 综合",
         "scoreUnit": "分",
         "supportsReleaseDedup": False,
-        "description": "LMArena Agent Arena 真实环境人类盲测排行（收录 Claude Fable 5.2、GPT-6 Astra、Gemini 4 等），衡量真实自主任务完成度与工具使用效率。",
+        "description": agent_desc,
         "columns": columns,
         "models": models,
     }
@@ -779,7 +798,11 @@ def main():
         "lmarena_vision",
     ]
 
-    content_blob = json.dumps({"vendors": vendors, "tracks": tracks}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    hashable_tracks = {
+        tid: {k: v for k, v in t.items() if k != "publishDate"}
+        for tid, t in tracks.items()
+    }
+    content_blob = json.dumps({"vendors": vendors, "tracks": hashable_tracks}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     content_hash = hashlib.sha256(content_blob.encode("utf-8")).hexdigest()[:16]
 
     force_write = "--force" in sys.argv
@@ -798,9 +821,9 @@ def main():
             "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "contentHash": content_hash,
             "refreshStrategy": "SWR (Stale-While-Revalidate)",
-            "scheduleCron": "0 * * * *",
+            "scheduleCron": "17 * * * *",
             "scheduleIntervalHours": 1,
-            "scheduleLabel": "前端 SWR 即时渲染 + 后台静默校验；后端每小时轻探针仅在数据变动时发布",
+            "scheduleLabel": "前端 SWR 即时渲染 + 后台并发校验最新源；后端每小时轻探针仅在数据变动时发布",
             "trackOrder": [t for t in track_order if t in tracks],
             "sources": [
                 {

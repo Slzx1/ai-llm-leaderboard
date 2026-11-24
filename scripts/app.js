@@ -27,6 +27,8 @@
     visibleCount: PAGE_STEP,
     compareIds: [],
     activeDrawerModel: null,
+    displayRankMap: null,
+    activeRadarArgs: null,
     revalidating: false,
     lastRevalidatedAt: 0,
     swrSource: "",
@@ -245,6 +247,14 @@
         btn.setAttribute("aria-pressed", String(isActive));
       });
     }
+
+    // Re-render open radar canvas so gridlines & labels match new theme immediately
+    if (el.compareModal?.classList.contains("open") && state.activeRadarArgs) {
+      const canvas = document.getElementById("radar-canvas");
+      if (canvas) {
+        drawRadarChart(canvas, ...state.activeRadarArgs);
+      }
+    }
   }
 
   function initTheme() {
@@ -269,22 +279,22 @@
   /* ========================================================================
      SWR (Stale-While-Revalidate) Data Engine
      1. Stale: Immediately hydrates from localStorage cache in <5ms
-     2. Revalidate: Silently checks Edge Worker / GitHub Raw CDN / Same-Origin JSON
+     2. Revalidate: Parallel timeout-protected check across Pages / CDN / Edge Worker, picking newest generatedAt
      3. Focus & Online Revalidation: Refreshes automatically when returning to tab
      ======================================================================== */
 
   function getConfiguredEdgeApi() {
     const param = new URLSearchParams(location.search).get("api");
     if (param && /^https?:\/\//i.test(param)) {
-      localStorage.setItem(SWR_EDGE_KEY, param);
+      safeStorageSet(SWR_EDGE_KEY, param);
       return param;
     }
-    return localStorage.getItem(SWR_EDGE_KEY) || "";
+    return safeStorageGet(SWR_EDGE_KEY) || "";
   }
 
   function readSwrCache() {
     try {
-      const raw = localStorage.getItem(SWR_CACHE_KEY);
+      const raw = safeStorageGet(SWR_CACHE_KEY);
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       if (parsed?.tracks && parsed?.meta) return parsed;
@@ -296,7 +306,7 @@
 
   function writeSwrCache(json) {
     try {
-      localStorage.setItem(SWR_CACHE_KEY, JSON.stringify(json));
+      safeStorageSet(SWR_CACHE_KEY, JSON.stringify(json));
     } catch {
       // ignore quota exceeded
     }
@@ -323,6 +333,23 @@
     updateSyncStatus();
   }
 
+  async function fetchJsonWithTimeout(url, force, timeoutMs = 6000) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const resp = await fetch(url, {
+        cache: force ? "no-store" : "default",
+        signal: ctrl.signal,
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const json = await resp.json();
+      if (!json?.tracks || !json?.meta) throw new Error("Invalid payload");
+      return json;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async function fetchFromBestEndpoint(force = false) {
     const isLocalHost = location.hostname === "127.0.0.1" || location.hostname === "localhost";
     const edgeApi = getConfiguredEdgeApi();
@@ -342,31 +369,64 @@
         url: force ? `${LOCAL_DATA_URL}?t=${Date.now()}` : LOCAL_DATA_URL,
       });
     } else {
-      // Fastly CDN for GitHub Raw reflects hourly change-detection commits immediately (5m edge cache)
+      // Race same-origin GitHub Pages snapshot + Fastly GitHub Raw CDN in parallel; pick the newest valid snapshot
+      candidates.push({
+        label: "Pages 站点快照",
+        url: force ? `${LOCAL_DATA_URL}?t=${Date.now()}` : LOCAL_DATA_URL,
+      });
       candidates.push({
         label: "GitHub CDN (SWR)",
         url: force ? `${REMOTE_CDN_URL}?t=${Date.now()}` : REMOTE_CDN_URL,
       });
-      candidates.push({
-        label: "Pages 静态快照",
-        url: force ? `${LOCAL_DATA_URL}?t=${Date.now()}` : LOCAL_DATA_URL,
-      });
     }
 
-    let lastErr = null;
-    for (const c of candidates) {
-      try {
-        const resp = await fetch(c.url, { cache: force ? "no-store" : "default" });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const json = await resp.json();
-        if (json?.tracks && json?.meta) {
-          return { json, source: c.label };
+    const pickBest = (list) => {
+      list.sort((a, b) => {
+        const ta = Date.parse(a.json.meta?.generatedAt || 0) || 0;
+        const tb = Date.parse(b.json.meta?.generatedAt || 0) || 0;
+        return tb - ta;
+      });
+      return list[0];
+    };
+
+    return await new Promise((resolve, reject) => {
+      const successes = [];
+      let firstErr = null;
+      let settledCount = 0;
+      let resolved = false;
+      let graceTimer = null;
+
+      const finish = () => {
+        if (resolved) return;
+        resolved = true;
+        if (graceTimer) clearTimeout(graceTimer);
+        if (successes.length > 0) {
+          resolve(pickBest(successes));
+        } else {
+          reject(firstErr || new Error("所有数据源均不可达"));
         }
-      } catch (err) {
-        lastErr = err;
-      }
-    }
-    throw lastErr || new Error("所有数据源均不可达");
+      };
+
+      candidates.forEach((c) => {
+        fetchJsonWithTimeout(c.url, force, 6000)
+          .then((json) => {
+            successes.push({ json, source: c.label });
+            if (successes.length === 1 && candidates.length > 1 && !graceTimer) {
+              // Allow up to 1.2s for peer endpoints to respond with a newer snapshot; never stall 6s on a blocked CDN
+              graceTimer = setTimeout(finish, 1200);
+            }
+          })
+          .catch((err) => {
+            if (!firstErr) firstErr = err;
+          })
+          .finally(() => {
+            settledCount += 1;
+            if (settledCount === candidates.length) {
+              finish();
+            }
+          });
+      });
+    });
   }
 
   async function revalidateSwr({ force = false, silent = true } = {}) {
@@ -384,18 +444,21 @@
     updateSyncStatus();
 
     try {
-      const prevHash = state.data?.meta?.contentHash || state.data?.meta?.generatedAt;
+      const prevHash = state.data?.meta?.contentHash || "";
+      const prevTime = Date.parse(state.data?.meta?.generatedAt || 0) || 0;
       const { json, source } = await fetchFromBestEndpoint(force);
       state.lastRevalidatedAt = Date.now();
       state.swrSource = source;
 
-      const nextHash = json.meta?.contentHash || json.meta?.generatedAt;
-      const hasNewer = !prevHash || nextHash !== prevHash;
+      const nextHash = json.meta?.contentHash || json.meta?.generatedAt || "";
+      const nextTime = Date.parse(json.meta?.generatedAt || 0) || 0;
+      const isNotOlder = nextTime >= prevTime;
+      const hasNewer = !state.data || (isNotOlder && (nextHash !== prevHash || nextTime > prevTime));
 
-      if (hasNewer || !state.data) {
+      if (hasNewer) {
         writeSwrCache(json);
         applyPayload(json);
-        if (prevHash) {
+        if (prevHash && nextHash !== prevHash) {
           showToast(`SWR 已同步最新排行数据 (${formatDateTimeLocal(json.meta.generatedAt)})`);
         } else if (!silent) {
           showToast(`已加载最新排行数据 (${source})`);
@@ -1029,16 +1092,29 @@
      Rendering
      ======================================================================== */
 
+  function updateSearchPlaceholder(track) {
+    if (!el.searchInput || !track?.models?.length) return;
+    const seen = [];
+    for (const m of track.models) {
+      const name = m.releaseName || m.name;
+      if (name && !seen.includes(name)) seen.push(name);
+      if (seen.length === 3) break;
+    }
+    el.searchInput.placeholder = seen.length
+      ? `搜索模型或厂商 (如 ${seen.join(", ")})...`
+      : "搜索模型名称或厂商...";
+  }
+
   function renderAll() {
     const track = getActiveTrack();
     const canPareto = supportsPareto(track);
     el.dedupReleaseWrap.style.display = track.supportsReleaseDedup ? "inline-flex" : "none";
     el.paretoOnlyWrap.style.display = canPareto ? "inline-flex" : "none";
+    updateSearchPlaceholder(track);
     renderTrackTabs();
-    renderSummaryStrip();
     renderTrackDesc();
     renderVendorControls();
-    renderTable();
+    renderTable(); // renderTable also calls reactive renderSummaryStrip(list, pareto)
     renderCompareDock();
   }
 
@@ -1068,16 +1144,23 @@
       .join("");
   }
 
-  function renderSummaryStrip() {
+  function renderSummaryStrip(filteredList, pareto) {
     const track = getActiveTrack();
-    const primaryCol = track.columns[0];
-    const topModel = track.models[0];
-    const topOpen = track.models.find((m) => m.isOpen);
-    const vendorSet = new Set(track.models.map((m) => m.vendor));
-    const uniqueReleases = track.supportsReleaseDedup
-      ? new Set(track.models.map((m) => m.releaseSlug || m.name)).size
-      : track.models.length;
-    const openCount = track.models.filter((m) => m.isOpen).length;
+    const viewList = Array.isArray(filteredList) ? filteredList : track.models;
+    const activeCol = track.columns.find((c) => c.key === state.sortKey) || track.columns[0];
+    const isFiltered =
+      state.license !== "all" ||
+      state.vendor !== "all" ||
+      state.search.trim().length > 0 ||
+      state.flagshipOnly ||
+      (supportsPareto(track) && state.paretoOnly);
+
+    const topModel = viewList[0];
+    const topScore = topModel ? (state.sortKey === "votes" ? topModel.votes : topModel.scores?.[activeCol.key]) : null;
+    const topOpen = viewList.find((m) => m.isOpen);
+    const topOpenScore = topOpen ? (state.sortKey === "votes" ? topOpen.votes : topOpen.scores?.[activeCol.key]) : null;
+    const vendorSet = new Set(viewList.map((m) => m.vendor));
+    const openCount = viewList.filter((m) => m.isOpen).length;
     const sourceMeta = state.data.meta.sources.find((s) => s.id === track.source);
 
     const topHtml = topModel
@@ -1085,50 +1168,74 @@
         <div class="summary-value-row">
           ${renderVendorIconHtml(topModel.vendor, "sm")}
           <span class="summary-main" title="${esc(topModel.name)}">${esc(topModel.name)}</span>
-          <span class="summary-score">${formatColValue(topModel.score, primaryCol)}</span>
+          <span class="summary-score">${state.sortKey === "votes" ? formatNumber(topScore) : formatColValue(topScore, activeCol)}</span>
         </div>
-        <div class="summary-meta">${esc(getVendor(topModel.vendor).name)} · ${topModel.isOpen ? "开源权重" : "闭源旗舰"}</div>
+        <div class="summary-meta">${esc(getVendor(topModel.vendor).name)} · ${topModel.isOpen ? "开源权重" : "闭源商业"}</div>
       `
-      : `<div class="summary-main">—</div>`;
+      : `<div class="summary-main">暂无匹配模型</div><div class="summary-meta">请调整上方筛选条件</div>`;
 
-    const openHtml = topOpen
-      ? `
+    // Card 2 adapts intelligently when filtering closed-only or Pareto track
+    let card2Label = isFiltered ? "当前视图开源 #1" : "开源权重 #1 最佳";
+    let card2Tag = "Open Weights";
+    let card2Html = "";
+
+    if (state.license === "closed" && pareto && pareto.frontier.length > 0) {
+      card2Label = "当前视图帕累托前沿";
+      card2Tag = pareto.cfg.shortLabel;
+      const cheapestTop = pareto.frontier[Math.min(pareto.frontier.length - 1, Math.floor(pareto.frontier.length / 2))];
+      card2Html = `
+        <div class="summary-value-row">
+          ${renderVendorIconHtml(cheapestTop.model.vendor, "sm")}
+          <span class="summary-main" title="${esc(cheapestTop.model.name)}">${esc(cheapestTop.model.name)}</span>
+          <span class="summary-score">${pareto.frontier.length} 款</span>
+        </div>
+        <div class="summary-meta">前沿代表 · 智力 ${formatColValue(cheapestTop.y, { format: "index" })} / ${formatColValue(cheapestTop.x, { format: pareto.cfg.format })}</div>
+      `;
+    } else if (topOpen) {
+      const openDisplayRank = viewList.indexOf(topOpen) + 1;
+      card2Html = `
         <div class="summary-value-row">
           ${renderVendorIconHtml(topOpen.vendor, "sm")}
           <span class="summary-main" title="${esc(topOpen.name)}">${esc(topOpen.name)}</span>
-          <span class="summary-score">${formatColValue(topOpen.score, primaryCol)}</span>
+          <span class="summary-score">${state.sortKey === "votes" ? formatNumber(topOpenScore) : formatColValue(topOpenScore, activeCol)}</span>
         </div>
-        <div class="summary-meta">${esc(getVendor(topOpen.vendor).name)} · 总榜 #${topOpen.rank} (${esc(topOpen.license)})</div>
-      `
-      : `
-        <div class="summary-value-row"><span class="summary-main">暂无开源上榜</span></div>
-        <div class="summary-meta">该赛道当前均为闭源 API 模型</div>
+        <div class="summary-meta">${esc(getVendor(topOpen.vendor).name)} · 当前第 #${openDisplayRank} (${esc(topOpen.license)})</div>
       `;
+    } else {
+      card2Html = `
+        <div class="summary-value-row"><span class="summary-main">暂无开源上榜</span></div>
+        <div class="summary-meta">${state.license === "closed" ? "当前已筛选为仅看闭源模型" : "当前筛选下无开源模型"}</div>
+      `;
+    }
+
+    const coverageMain = track.supportsReleaseDedup && !isFiltered && state.dedupRelease
+      ? `${viewList.length} 系列 / ${track.models.length} 档位`
+      : `${viewList.length} 款模型`;
 
     el.summaryStrip.innerHTML = `
       <div class="summary-cell">
         <div class="summary-label">
-          <span>当前赛道 #1 领跑</span>
-          <span class="mono">${esc(primaryCol.label)}</span>
+          <span>${isFiltered ? "当前筛选 #1 领跑" : "当前赛道 #1 领跑"}</span>
+          <span class="mono">${esc(state.sortKey === "votes" ? "盲测票数" : activeCol.label)}</span>
         </div>
         ${topHtml}
       </div>
 
       <div class="summary-cell">
         <div class="summary-label">
-          <span>开源权重 #1 最佳</span>
-          <span class="mono">Open Weights</span>
+          <span>${esc(card2Label)}</span>
+          <span class="mono">${esc(card2Tag)}</span>
         </div>
-        ${openHtml}
+        ${card2Html}
       </div>
 
       <div class="summary-cell">
-        <div class="summary-label"><span>评测覆盖</span></div>
+        <div class="summary-label"><span>${isFiltered ? "当前筛选覆盖" : "评测覆盖"}</span></div>
         <div class="summary-value-row">
-          <span class="summary-main mono">${uniqueReleases} 系列 / ${track.models.length} 档位</span>
+          <span class="summary-main mono">${esc(coverageMain)}</span>
           <span class="summary-score" style="color:var(--text-secondary)">${vendorSet.size} 厂商</span>
         </div>
-        <div class="summary-meta">开源 ${openCount} 项 · 闭源 ${track.models.length - openCount} 项</div>
+        <div class="summary-meta">开源 ${openCount} 款 · 闭源 ${viewList.length - openCount} 款</div>
       </div>
 
       <div class="summary-cell">
@@ -1139,7 +1246,7 @@
         <div class="summary-value-row">
           <span class="summary-main">${esc(sourceMeta?.name || track.source)}</span>
         </div>
-        <div class="summary-meta">自动同步于 ${esc(formatDateTimeLocal(state.data.meta.generatedAt))}</div>
+        <div class="summary-meta">同步于 ${esc(formatDateTimeLocal(state.data.meta.generatedAt))}</div>
       </div>
     `;
   }
@@ -1231,6 +1338,17 @@
         .join("");
   }
 
+  function getGlobalTierBaseline(track) {
+    if (!track.supportsReleaseDedup || !state.dedupRelease) return track.models;
+    const seen = new Set();
+    return track.models.filter((m) => {
+      const rk = m.releaseSlug || m.name;
+      if (seen.has(rk)) return false;
+      seen.add(rk);
+      return true;
+    });
+  }
+
   function renderTable() {
     const track = getActiveTrack();
     const baseList = getFilteredAndSortedModels(true);
@@ -1249,8 +1367,14 @@
         ? baseList.filter((m) => pareto.frontierSet.has(m.id))
         : baseList;
 
-    const stats = computeColumnStats(track, list);
-    const globalStats = computeColumnStats(track, track.models);
+    // Keep displayRank map synced so detail drawer shows the exact rank from the table
+    state.displayRankMap = new Map(list.map((m, idx) => [m.id, idx + 1]));
+
+    // Update top 4 KPI cards reactively to match current filter & sort
+    renderSummaryStrip(list, pareto);
+
+    // Compute tier highlight thresholds against the FULL track (never inflated when filtering to 1 vendor)
+    const globalStats = computeColumnStats(track, getGlobalTierBaseline(track));
     const hasVotes = track.models.some((m) => m.votes != null);
     const cols = track.columns;
 
@@ -1331,7 +1455,7 @@
             if (val == null) {
               return `<td class="td-score ${isSortedCol ? "sorted-col" : ""}"><span class="dim-pill tier-empty">—</span></td>`;
             }
-            const cStat = stats[col.key];
+            const cStat = globalStats[col.key];
             let tier = "";
             if (col.lowerIsBetter) {
               if (val <= cStat.top5) tier = "tier-top";
@@ -1438,6 +1562,12 @@
     const v = getVendor(model.vendor);
     const stats = computeColumnStats(track);
     const primaryCol = track.columns[0];
+    const viewRank = state.displayRankMap?.get(model.id);
+    const shownRank = viewRank != null ? viewRank : model.rank;
+    const rankSub =
+      viewRank != null && viewRank !== model.rank
+        ? `<span style="font-size:.73rem;color:var(--text-muted);font-weight:500"> (全档位 #${model.rank})</span>`
+        : "";
 
     el.drawerTitleGroup.innerHTML = `
       ${renderVendorIconHtml(model.vendor, "lg")}
@@ -1460,7 +1590,7 @@
       <div class="drawer-kpi-grid">
         <div class="drawer-kpi">
           <div class="drawer-kpi-label">${esc(track.shortName)} 排名</div>
-          <div class="drawer-kpi-val">#${model.rank}</div>
+          <div class="drawer-kpi-val">#${shownRank}${rankSub}</div>
         </div>
         <div class="drawer-kpi">
           <div class="drawer-kpi-label">${esc(primaryCol.label)}</div>
@@ -1727,8 +1857,8 @@
       <div class="compare-grid" style="${canRadar ? "" : "grid-template-columns:1fr"}">
         ${
           canRadar
-            ? `<div class="radar-wrap">
-                 <canvas id="radar-canvas" width="320" height="320" style="width:320px;height:320px"></canvas>
+            ? `<div class="radar-wrap" id="radar-wrap">
+                 <canvas id="radar-canvas"></canvas>
                  <div class="radar-legend">${legendHtml}</div>
                </div>`
             : ""
@@ -1754,8 +1884,8 @@
             </thead>
             <tbody>
               <tr>
-                <td>赛道排名</td>
-                ${models.map((m) => `<td class="mono">#${m.rank}</td>`).join("")}
+                <td>当前排名</td>
+                ${models.map((m) => `<td class="mono">#${state.displayRankMap?.get(m.id) ?? m.rank}</td>`).join("")}
               </tr>
               <tr>
                 <td>协议类型</td>
@@ -1771,25 +1901,33 @@
     el.compareModal.classList.add("open");
 
     if (canRadar) {
+      state.activeRadarArgs = [effectiveRadarCols, models, stats];
       drawRadarChart(document.getElementById("radar-canvas"), effectiveRadarCols, models, stats);
+    } else {
+      state.activeRadarArgs = null;
     }
   }
 
   function drawRadarChart(canvas, cols, models, stats) {
     const dpr = window.devicePixelRatio || 1;
-    const size = 320;
+    const wrap = canvas.parentElement;
+    const availW = wrap ? wrap.getBoundingClientRect().width : 320;
+    const size = Math.round(Math.max(240, Math.min(340, availW || 320)));
+    canvas.style.width = `${size}px`;
+    canvas.style.height = `${size}px`;
     canvas.width = size * dpr;
     canvas.height = size * dpr;
     const ctx = canvas.getContext("2d");
     ctx.scale(dpr, dpr);
 
     const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-    const gridColor = isDark ? "rgba(255,255,255,0.12)" : "rgba(20,21,23,0.10)";
+    const gridColor = isDark ? "rgba(255,255,255,0.14)" : "rgba(20,21,23,0.11)";
     const labelColor = isDark ? "#a1a7b5" : "#4b5563";
+    const ringTextColor = isDark ? "rgba(161,167,181,0.55)" : "rgba(88,93,104,0.55)";
 
     const cx = size / 2;
     const cy = size / 2;
-    const r = 104;
+    const r = Math.round(size * 0.31);
     const n = cols.length;
 
     for (let ring = 1; ring <= 4; ring++) {
@@ -1806,6 +1944,13 @@
       ctx.strokeStyle = gridColor;
       ctx.lineWidth = 1;
       ctx.stroke();
+
+      // Subtle absolute scale tick labels (25 / 50 / 75 / 100) along top axis
+      ctx.font = '500 9px "JetBrains Mono", monospace';
+      ctx.fillStyle = ringTextColor;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(ring * 25), cx + 4, cy - rr + 1);
     }
 
     ctx.font = '500 11px "Inter", "Noto Sans SC", sans-serif';
@@ -1826,19 +1971,14 @@
       ctx.fillText(cols[i].label, lx, ly);
     }
 
+    // Plot using true absolute scale (computeAbsoluteBarPercent / 100) matching table & drawer
     models.forEach((m, mi) => {
       const color = COMPARE_COLORS[mi % COMPARE_COLORS.length];
       ctx.beginPath();
       for (let i = 0; i < n; i++) {
         const col = cols[i];
         const val = m.scores?.[col.key];
-        const st = stats[col.key];
-        const span = Math.max(0.01, st.max - st.min);
-        let norm = 0.1;
-        if (val != null) {
-          const raw = col.lowerIsBetter ? (st.max - val) / span : (val - st.min) / span;
-          norm = Math.max(0.12, Math.min(1, raw));
-        }
+        const norm = val != null ? Math.max(0.05, computeAbsoluteBarPercent(val, col, stats[col.key]) / 100) : 0.04;
         const ang = (Math.PI * 2 * i) / n - Math.PI / 2;
         const x = cx + Math.cos(ang) * (r * norm);
         const y = cy + Math.sin(ang) * (r * norm);
@@ -2022,9 +2162,18 @@
 
     let resizeTimer = null;
     window.addEventListener("resize", () => {
-      if (!state.data || !getActiveTrack().isParetoTrack) return;
+      if (!state.data) return;
+      const needPareto = getActiveTrack().isParetoTrack;
+      const needRadar = el.compareModal.classList.contains("open") && state.activeRadarArgs;
+      if (!needPareto && !needRadar) return;
       clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => renderTable(), 120);
+      resizeTimer = setTimeout(() => {
+        if (needPareto) renderTable();
+        if (needRadar) {
+          const canvas = document.getElementById("radar-canvas");
+          if (canvas) drawRadarChart(canvas, ...state.activeRadarArgs);
+        }
+      }, 120);
     });
 
     el.tableHead.addEventListener("click", (e) => {
@@ -2068,9 +2217,13 @@
     });
     el.btnOpenCompare.addEventListener("click", openCompareModal);
 
-    el.compareModalClose.addEventListener("click", () => el.compareModal.classList.remove("open"));
+    const closeCompareModal = () => {
+      el.compareModal.classList.remove("open");
+      state.activeRadarArgs = null;
+    };
+    el.compareModalClose.addEventListener("click", closeCompareModal);
     el.compareModal.addEventListener("click", (e) => {
-      if (e.target === el.compareModal) el.compareModal.classList.remove("open");
+      if (e.target === el.compareModal) closeCompareModal();
     });
 
     el.sourcesModalClose.addEventListener("click", () => el.sourcesModal.classList.remove("open"));
@@ -2081,7 +2234,7 @@
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
         closeDrawer();
-        el.compareModal.classList.remove("open");
+        closeCompareModal();
         el.sourcesModal.classList.remove("open");
       }
     });

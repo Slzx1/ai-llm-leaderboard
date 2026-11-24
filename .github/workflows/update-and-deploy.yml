@@ -2,8 +2,8 @@ name: Update Leaderboard Data & Deploy GitHub Pages
 
 on:
   schedule:
-    # Lightweight hourly change-detection probe (only commits & redeploys when contentHash changes)
-    - cron: "0 * * * *"
+    # Off-peak hourly change-detection probe (minute :17 avoids top-of-hour GitHub scheduler congestion)
+    - cron: "17 * * * *"
   push:
     branches: ["main"]
   workflow_dispatch:

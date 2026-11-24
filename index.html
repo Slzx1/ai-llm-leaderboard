@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="color-scheme" content="light dark" />
   <title>ModelRank · 最新 AI 大模型多维度排行榜 (Artificial Analysis + LMArena 实时同步)</title>
-  <meta name="description" content="权威、透明、定时自动更新的 AI 大模型多维度排行榜。以 Artificial Analysis Intelligence Index v5 为核心数据源（覆盖 Claude Fable 5.2、GPT-6.2 Astra/Sol、Gemini 4、Kimi K3.1、Qwen4、DeepSeek 等最新旗舰），辅以 LMArena 盲测榜，提供编程、推理、抗幻觉、速度与 API 价格全景对比。" />
+  <meta name="description" content="权威、透明、自动同步更新的 AI 大模型多维度排行榜。聚合 Artificial Analysis 独立综合基准与 LMArena 人类盲测榜，支持帕累托性价比前沿分析、编程、前沿学术难题、抗幻觉、推理速度与 API 价格全景对比。" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -24,7 +24,7 @@
       if (meta) meta.setAttribute("content", mode === "auto" ? "light dark" : resolved);
     })();
   </script>
-  <link rel="stylesheet" href="styles/main.css?v=6" />
+  <link rel="stylesheet" href="styles/main.css?v=7" />
 </head>
 <body>
   <!-- Compact Sticky Masthead -->
@@ -81,7 +81,7 @@
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.3-4.3" />
           </svg>
-          <input id="search-input" class="search-input" type="search" placeholder="搜索模型或厂商 (如 GPT-6.2, Fable, Gemini 4)..." autocomplete="off" />
+          <input id="search-input" class="search-input" type="search" placeholder="搜索模型名称或厂商..." autocomplete="off" />
           <button id="search-clear" class="search-clear" type="button" aria-label="清空搜索">×</button>
         </div>
 
@@ -193,6 +193,6 @@
   <!-- Toast -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="scripts/app.js?v=6" defer></script>
+  <script src="scripts/app.js?v=7" defer></script>
 </body>
 </html>
