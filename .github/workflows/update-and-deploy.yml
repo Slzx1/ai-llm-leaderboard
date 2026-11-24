@@ -1,0 +1,76 @@
+name: Update Leaderboard Data & Deploy GitHub Pages
+
+on:
+  schedule:
+    # Every 6 hours UTC (00:00, 06:00, 12:00, 18:00 UTC)
+    - cron: "0 */6 * * *"
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages-deploy"
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pyarrow
+        run: python -m pip install --upgrade pip pyarrow
+
+      - name: Fetch latest official leaderboard data (LMArena + LiveBench + OpenRouter)
+        run: python scripts/fetch_leaderboard.py
+
+      - name: Commit updated snapshot if data changed (scheduled / manual runs)
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: |
+          if ! git diff --quiet data/leaderboard.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add data/leaderboard.json
+            git commit -m "chore(data): auto-sync AI LLM leaderboard ($(date -u +'%Y-%m-%d %H:%M UTC'))"
+            git push
+          else
+            echo "Leaderboard data unchanged."
+          fi
+
+      - name: Assemble clean static site artifact
+        run: |
+          rm -rf _site
+          mkdir -p _site/scripts
+          cp index.html _site/
+          cp -r styles _site/
+          cp -r data _site/
+          cp -r assets _site/
+          cp scripts/app.js _site/scripts/
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "_site"
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

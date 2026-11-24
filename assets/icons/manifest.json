@@ -1,0 +1,277 @@
+{
+  "google": {
+    "icon": "assets/icons/google.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/google-color.svg"
+  },
+  "openai": {
+    "icon": "assets/icons/openai.svg",
+    "mono": true,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/openai.svg"
+  },
+  "anthropic": {
+    "icon": "assets/icons/anthropic.svg",
+    "mono": true,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/anthropic.svg"
+  },
+  "meta": {
+    "icon": "assets/icons/meta.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/meta-color.svg"
+  },
+  "deepseek": {
+    "icon": "assets/icons/deepseek.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/deepseek-color.svg"
+  },
+  "xai": {
+    "icon": "assets/icons/xai.svg",
+    "mono": true,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/xai.svg"
+  },
+  "alibaba": {
+    "icon": "assets/icons/alibaba.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/alibaba-color.svg"
+  },
+  "bytedance": {
+    "icon": "assets/icons/bytedance.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/bytedance-color.svg"
+  },
+  "tencent": {
+    "icon": "assets/icons/tencent.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/tencent-color.svg"
+  },
+  "baidu": {
+    "icon": "assets/icons/baidu.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/baidu-color.svg"
+  },
+  "zai": {
+    "icon": "assets/icons/zai.svg",
+    "mono": true,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/zai.svg"
+  },
+  "zhipu": {
+    "icon": "assets/icons/zhipu.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/zhipu-color.svg"
+  },
+  "moonshot": {
+    "icon": "assets/icons/moonshot.svg",
+    "mono": true,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/moonshot.svg"
+  },
+  "minimax": {
+    "icon": "assets/icons/minimax.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/minimax-color.svg"
+  },
+  "stepfun": {
+    "icon": "assets/icons/stepfun.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/stepfun-color.svg"
+  },
+  "mistral": {
+    "icon": "assets/icons/mistral.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/mistral-color.svg"
+  },
+  "cohere": {
+    "icon": "assets/icons/cohere.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/cohere-color.svg"
+  },
+  "nvidia": {
+    "icon": "assets/icons/nvidia.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/nvidia-color.svg"
+  },
+  "microsoft": {
+    "icon": "assets/icons/microsoft.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/microsoft-color.svg"
+  },
+  "microsoft-ai": {
+    "icon": "assets/icons/microsoft.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/microsoft-color.svg"
+  },
+  "amazon": {
+    "icon": "assets/icons/aws.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/aws-color.svg"
+  },
+  "ibm": {
+    "icon": "assets/icons/ibm.svg",
+    "mono": true,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/ibm.svg"
+  },
+  "xiaomi": {
+    "icon": "assets/icons/xiaomi.svg",
+    "mono": false,
+    "source": "https://cdn.simpleicons.org/xiaomi/FF6900"
+  },
+  "meituan": {
+    "icon": "assets/icons/meituan.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/longcat-color.svg"
+  },
+  "ant-group": {
+    "icon": "assets/icons/antgroup.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/antgroup-color.svg"
+  },
+  "allenai": {
+    "icon": "assets/icons/allenai.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/ai2-color.svg"
+  },
+  "upstage": {
+    "icon": "assets/icons/upstage.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/upstage-color.svg"
+  },
+  "perplexity": {
+    "icon": "assets/icons/perplexity.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/perplexity-color.svg"
+  },
+  "reflection": {
+    "icon": "assets/icons/reflection.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/reflection-color.svg"
+  },
+  "inception-ai": {
+    "icon": "assets/icons/inception.svg",
+    "mono": true,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/inception.svg"
+  },
+  "arcee-ai": {
+    "icon": "assets/icons/arcee.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/arcee-color.svg"
+  },
+  "poolside": {
+    "icon": "assets/icons/poolside.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/poolside-color.svg"
+  },
+  "kling": {
+    "icon": "assets/icons/kling.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/kling-color.svg"
+  },
+  "kwaikat": {
+    "icon": "assets/icons/kwaikat.svg",
+    "mono": true,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/kwaikat.svg"
+  },
+  "bfl": {
+    "icon": "assets/icons/bfl.svg",
+    "mono": true,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/bfl.svg"
+  },
+  "stability ai": {
+    "icon": "assets/icons/stability.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/stability-color.svg"
+  },
+  "ideogram": {
+    "icon": "assets/icons/ideogram.svg",
+    "mono": true,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/ideogram.svg"
+  },
+  "recraft": {
+    "icon": "assets/icons/recraft.svg",
+    "mono": true,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/recraft.svg"
+  },
+  "runway": {
+    "icon": "assets/icons/runway.svg",
+    "mono": true,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/runway.svg"
+  },
+  "luma-ai": {
+    "icon": "assets/icons/luma.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/luma-color.svg"
+  },
+  "pika": {
+    "icon": "assets/icons/pika.svg",
+    "mono": true,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/pika.svg"
+  },
+  "krea": {
+    "icon": "assets/icons/krea.svg",
+    "mono": true,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/krea.svg"
+  },
+  "reve": {
+    "icon": "assets/icons/reve.svg",
+    "mono": true,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/reve.svg"
+  },
+  "skyreel": {
+    "icon": "assets/icons/skywork.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/skywork-color.svg"
+  },
+  "synlan": {
+    "icon": "assets/icons/spark.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/spark-color.svg"
+  },
+  "pixverse": {
+    "icon": "assets/icons/pixverse.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/pixverse-color.svg"
+  },
+  "lightricks": {
+    "icon": "assets/icons/lightricks.svg",
+    "mono": true,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/lightricks.svg"
+  },
+  "pruna": {
+    "icon": "assets/icons/pruna.svg",
+    "mono": false,
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/prunaai-color.svg"
+  },
+  "thinky": {
+    "icon": "assets/icons/thinky.png",
+    "mono": false,
+    "source": "https://www.google.com/s2/favicons?domain=thinkingmachines.ai&sz=128"
+  },
+  "diffbot": {
+    "icon": "assets/icons/diffbot.png",
+    "mono": false,
+    "source": "https://www.google.com/s2/favicons?domain=diffbot.com&sz=128"
+  },
+  "genmo": {
+    "icon": "assets/icons/genmo.png",
+    "mono": false,
+    "source": "https://www.google.com/s2/favicons?domain=genmo.ai&sz=128"
+  },
+  "hidream": {
+    "icon": "assets/icons/hidream.png",
+    "mono": false,
+    "source": "https://www.google.com/s2/favicons?domain=hidreamai.com&sz=128"
+  },
+  "kandinsky": {
+    "icon": "assets/icons/kandinsky.png",
+    "mono": false,
+    "source": "https://www.google.com/s2/favicons?domain=sberbank.com&sz=128"
+  },
+  "leonardo-ai": {
+    "icon": "assets/icons/leonardo.png",
+    "mono": false,
+    "source": "https://www.google.com/s2/favicons?domain=leonardo.ai&sz=128"
+  },
+  "unisound": {
+    "icon": "assets/icons/unisound.png",
+    "mono": false,
+    "source": "https://www.google.com/s2/favicons?domain=unisound.com&sz=128"
+  }
+}
