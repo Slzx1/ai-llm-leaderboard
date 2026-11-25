@@ -14,7 +14,9 @@ import android.provider.MediaStore;
 import android.util.Base64;
 import android.view.View;
 import android.view.Window;
+import android.view.WindowInsets;
 import android.view.WindowInsetsController;
+import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
@@ -37,6 +39,7 @@ public class MainActivity extends Activity {
     private WebView webView;
     private ProgressBar progressBar;
     private long lastBackPressMs = 0L;
+    private boolean currentDark = false;
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
@@ -67,6 +70,8 @@ public class MainActivity extends Activity {
         root.addView(webView);
         root.addView(progressBar);
         setContentView(root);
+
+        hideStatusBar();
 
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
@@ -122,6 +127,34 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            hideStatusBar();
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private void hideStatusBar() {
+        Window window = getWindow();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            WindowInsetsController ctrl = window.getInsetsController();
+            if (ctrl != null) {
+                ctrl.hide(WindowInsets.Type.statusBars());
+                ctrl.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            }
+        } else {
+            window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            View decor = window.getDecorView();
+            decor.setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_FULLSCREEN
+                            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            );
+        }
+    }
+
+    @Override
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
         if (webView != null) {
@@ -158,28 +191,20 @@ public class MainActivity extends Activity {
     }
 
     private void applySystemBarTheme(final boolean isDark) {
+        currentDark = isDark;
         runOnUiThread(() -> {
             Window window = getWindow();
-            int barColor = isDark ? Color.parseColor("#161920") : Color.parseColor("#FFFFFF");
-            window.setStatusBarColor(barColor);
             window.setNavigationBarColor(isDark ? Color.parseColor("#0F1115") : Color.parseColor("#F7F7F5"));
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 WindowInsetsController ctrl = window.getInsetsController();
                 if (ctrl != null) {
-                    int flags = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
-                            | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
-                    ctrl.setSystemBarsAppearance(isDark ? 0 : flags, flags);
+                    ctrl.setSystemBarsAppearance(
+                            isDark ? 0 : WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
+                            WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+                    );
                 }
-            } else {
-                View decor = window.getDecorView();
-                int vis = decor.getSystemUiVisibility();
-                if (isDark) {
-                    vis &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
-                } else {
-                    vis |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
-                }
-                decor.setSystemUiVisibility(vis);
             }
+            hideStatusBar();
         });
     }
 

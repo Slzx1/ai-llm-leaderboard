@@ -4,20 +4,30 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ANDROID_DIR="$ROOT_DIR/android"
 BUILD_DIR="$ANDROID_DIR/build"
-SDK="${ANDROID_HOME:-/opt/android-sdk}"
-BUILD_TOOLS="$SDK/build-tools/35.0.0"
-ANDROID_JAR="$SDK/platforms/android-35/android.jar"
-OUT_APK="$BUILD_DIR/AI-Model-Leaderboard-v1.0.0.apk"
+SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/opt/android-sdk}}"
+
+# Auto-detect highest installed build-tools & android platform (works locally & on GitHub Actions ubuntu-latest)
+BT_VER="$(ls -1 "$SDK/build-tools" | sort -V | tail -n 1)"
+PLAT_VER="$(ls -1 "$SDK/platforms" | grep '^android-' | sort -V | tail -n 1)"
+BUILD_TOOLS="$SDK/build-tools/$BT_VER"
+ANDROID_JAR="$SDK/platforms/$PLAT_VER/android.jar"
+
+VERSION_NAME="${VERSION_NAME:-1.0.1}"
+OUT_APK="$BUILD_DIR/AI-Model-Leaderboard-v${VERSION_NAME}.apk"
 KEYSTORE="${KEYSTORE_PATH:-$HOME/.modelrank-release.jks}"
+
+echo "Using Android SDK: $SDK (platform=$PLAT_VER, build-tools=$BT_VER)"
 
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR/res_compiled" "$BUILD_DIR/gen" "$BUILD_DIR/classes" "$BUILD_DIR/dex"
 
-# 1. Generate multi-density launcher icons from assets/site-icon.png
-python3 - "$ROOT_DIR/assets/site-icon.png" "$ANDROID_DIR/res" <<'PY'
+# 1. Generate multi-density launcher icons if Pillow is available (checked-in icons already exist)
+python3 - "$ROOT_DIR/assets/site-icon.png" "$ANDROID_DIR/res" <<'PY' || true
 import os, sys
-from PIL import Image
-
+try:
+    from PIL import Image
+except ImportError:
+    sys.exit(0)
 src = Image.open(sys.argv[1]).convert("RGBA")
 res_dir = sys.argv[2]
 for folder, size in [
@@ -58,7 +68,7 @@ javac --release 11 \
 (cd "$BUILD_DIR/dex" && zip -q -u "$BUILD_DIR/app-unaligned.apk" classes.dex)
 "$BUILD_TOOLS/zipalign" -p -f 4 "$BUILD_DIR/app-unaligned.apk" "$OUT_APK"
 
-# 5. Generate signing keystore if absent & sign APK (v1+v2+v3)
+# 5. Generate signing keystore if absent & sign APK (v2+v3)
 if [ ! -f "$KEYSTORE" ]; then
   keytool -genkeypair -v \
     -keystore "$KEYSTORE" \

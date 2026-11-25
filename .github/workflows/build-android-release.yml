@@ -1,0 +1,59 @@
+name: Build & Publish Android App Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v1.0.1)"
+        required: true
+        default: "v1.0.1"
+
+permissions:
+  contents: write
+
+jobs:
+  release-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Build & sign Android APK
+        env:
+          VERSION_NAME: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+        run: |
+          VER="${VERSION_NAME#v}"
+          echo "TAG=v${VER}" >> "$GITHUB_ENV"
+          echo "VER=${VER}" >> "$GITHUB_ENV"
+          VERSION_NAME="${VER}" bash android/build_apk.sh
+
+      - name: Publish APK to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK="android/build/AI-Model-Leaderboard-v${VER}.apk"
+          NOTES="### AI模型排行榜 Android App (${TAG})
+
+          - **全屏无状态栏沉浸体验**：隐藏手机顶部时间/通知/电量状态栏，首屏直出榜单 Top 1–10，从屏幕顶部下滑可临时唤出系统栏。
+          - **实时权威数据**：同步 Artificial Analysis + LMArena 多维度权威榜单与帕累托性价比前沿分析。
+          - **原生相册保存**：支持一键导出 2× 高清排行榜、帕累托图与多模型雷达对比图，直接保存至系统相册（\`Pictures/AI模型排行榜\`）。
+          - **原生交互**：硬件返回键优先关闭弹窗/抽屉/筛选面板，外部链接自动调用系统浏览器打开。
+          - **安装要求**：Android 7.0 – Android 15（体积约 85 KB，已通过 APK v2/v3 签名校验）。"
+
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release upload "${TAG}" "${APK}" --clobber
+            gh release edit "${TAG}" --title "AI模型排行榜 ${TAG} (Android App)" --notes "${NOTES}"
+          else
+            gh release create "${TAG}" "${APK}" \
+              --title "AI模型排行榜 ${TAG} (Android App)" \
+              --notes "${NOTES}"
+          fi
