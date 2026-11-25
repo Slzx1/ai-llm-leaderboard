@@ -166,9 +166,22 @@ a:hover {
 
 .brand {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
   min-width: 0;
+}
+
+.brand-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  flex-shrink: 0;
+  object-fit: contain;
+  display: block;
+}
+
+[data-theme="dark"] .brand-logo {
+  box-shadow: 0 0 0 1px var(--border-strong);
 }
 
 .brand-title {

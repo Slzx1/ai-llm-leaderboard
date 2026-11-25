@@ -4,8 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="color-scheme" content="light dark" />
-  <title>ModelRank · 最新 AI 大模型多维度排行榜 (Artificial Analysis + LMArena 实时同步)</title>
-  <meta name="description" content="权威、透明、自动同步更新的 AI 大模型多维度排行榜。聚合 Artificial Analysis 独立综合基准与 LMArena 人类盲测榜，支持帕累托性价比前沿分析、编程、前沿学术难题、抗幻觉、推理速度与 API 价格全景对比。" />
+  <title>ModelRank · AI模型排行榜</title>
+  <meta name="description" content="权威、透明、自动同步更新的 AI模型排行榜。聚合 Artificial Analysis 独立综合基准与 LMArena 人类盲测榜，支持帕累托性价比前沿分析、编程、前沿学术难题、抗幻觉、推理速度与 API 价格全景对比。" />
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="256x256" href="assets/site-icon.png" />
+  <link rel="shortcut icon" href="favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -24,14 +28,15 @@
       if (meta) meta.setAttribute("content", mode === "auto" ? "light dark" : resolved);
     })();
   </script>
-  <link rel="stylesheet" href="styles/main.css?v=9" />
+  <link rel="stylesheet" href="styles/main.css?v=10" />
 </head>
 <body>
   <!-- Compact Sticky Masthead -->
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <h1 class="brand-title">AI 大模型排行榜</h1>
+        <img class="brand-logo" src="assets/site-icon.png" alt="AI模型排行榜" width="28" height="28" />
+        <h1 class="brand-title">AI模型排行榜</h1>
         <span class="brand-sub">Artificial Analysis · LMArena 多维度权威榜单</span>
       </div>
 
@@ -318,7 +323,7 @@
   <!-- Toast -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="scripts/exporter.js?v=9" defer></script>
-  <script src="scripts/app.js?v=9" defer></script>
+  <script src="scripts/exporter.js?v=10" defer></script>
+  <script src="scripts/app.js?v=10" defer></script>
 </body>
 </html>

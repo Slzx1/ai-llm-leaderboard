@@ -62,7 +62,7 @@ jobs:
         run: |
           rm -rf _site
           mkdir -p _site/scripts
-          cp index.html _site/
+          cp index.html favicon.ico _site/
           cp -r styles _site/
           cp -r data _site/
           cp -r assets _site/

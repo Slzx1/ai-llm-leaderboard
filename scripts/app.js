@@ -2287,9 +2287,9 @@
     const srcMeta = state.data.meta.sources.find((s) => s.id === track.source);
 
     const titleMap = {
-      table: `AI 大模型排行榜 · ${track.name}`,
-      pareto: `AI 大模型帕累托性价比前沿`,
-      combined: `AI 大模型帕累托性价比与排行榜`,
+      table: `AI模型排行榜 · ${track.name}`,
+      pareto: `AI模型帕累托性价比前沿`,
+      combined: `AI模型帕累托性价比与排行榜`,
     };
 
     const tags = buildExportTags(track, {
@@ -2322,7 +2322,7 @@
       hasVotes,
       isDark,
       headerInfo: {
-        title: titleMap[exportState.type] || `AI 大模型排行榜 · ${track.name}`,
+        title: titleMap[exportState.type] || `AI模型排行榜 · ${track.name}`,
         sourceName: srcMeta?.name || track.source,
         syncedAt: formatDateTimeLocal(state.data.meta.generatedAt),
         tags,
