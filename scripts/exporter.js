@@ -335,7 +335,7 @@
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillText(
-      "数据源自 Artificial Analysis 与 LMArena 官方公开评测 · 厂商图标 100% 为官方原版资产",
+      "数据来源：Artificial Analysis · LMArena",
       padX,
       y + 12
     );
@@ -670,8 +670,6 @@
       rx -= 12;
     };
 
-    drawLegendText("★ 官方图标 = 帕累托最优", pal.accent);
-    rx -= 14;
     drawLegendText("开源");
     drawLegendDot(pal.dotOpen, pal.dotOpenStroke);
     drawLegendText("闭源");

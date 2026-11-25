@@ -2251,7 +2251,6 @@
         tags: [
           { text: `对比 ${models.length} 款模型`, accent: true },
           { text: "雷达图绝对刻度 (0–100)" },
-          { text: "电脑版宽屏视图" },
         ],
       },
       helpers: getExporterHelpers(),
@@ -2388,7 +2387,7 @@
     if (!state.data || !el.exportModal?.classList.contains("open")) return;
     const token = ++exportState.renderToken;
     el.exportPreviewLoading.style.display = "block";
-    el.exportPreviewLoading.textContent = "正在渲染电脑版 2× 高清预览...";
+    el.exportPreviewLoading.textContent = "正在生成预览...";
     el.exportPreviewImg.style.display = "none";
     el.exportPreviewMeta.textContent = "渲染中...";
     el.btnExportDownload.disabled = true;
@@ -2470,7 +2469,7 @@
     try {
       const { canvas, filename } = await buildCompareExportCanvas("current");
       await window.ModelRankExporter.downloadCanvas(canvas, filename);
-      showToast(`已导出电脑版高清对比图（${canvas.width}×${canvas.height}）`);
+      showToast(`已导出对比图：${filename}`);
     } catch (err) {
       showToast(`导出失败：${err.message}`);
     } finally {
@@ -2712,7 +2711,7 @@
       try {
         const canvas = exportState.lastCanvas || (await buildCurrentExportCanvas()).canvas;
         await window.ModelRankExporter.downloadCanvas(canvas, exportState.lastFilename);
-        showToast(`已导出电脑版高清图片：${exportState.lastFilename}`);
+        showToast(`已导出图片：${exportState.lastFilename}`);
       } catch (err) {
         showToast(`导出失败：${err.message}`);
       }

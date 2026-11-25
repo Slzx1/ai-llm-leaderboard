@@ -24,7 +24,7 @@
       if (meta) meta.setAttribute("content", mode === "auto" ? "light dark" : resolved);
     })();
   </script>
-  <link rel="stylesheet" href="styles/main.css?v=8" />
+  <link rel="stylesheet" href="styles/main.css?v=9" />
 </head>
 <body>
   <!-- Compact Sticky Masthead -->
@@ -41,7 +41,7 @@
           <span id="sync-status-label" class="sync-trigger-text">加载同步状态...</span>
         </button>
 
-        <button id="btn-export" class="btn-ghost" type="button" title="导出排行榜、帕累托图或对比图为电脑版高清图片">
+        <button id="btn-export" class="btn-ghost" type="button" title="导出排行榜、帕累托图或对比图为图片">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
             <polyline points="7 10 12 15 17 10" />
@@ -183,7 +183,7 @@
       <div class="modal-head">
         <h2 id="compare-modal-title">多模型多维度能力对比</h2>
         <div class="modal-head-actions">
-          <button id="btn-export-compare" class="btn-ghost" type="button" title="以电脑版宽屏高清 PNG 导出当前雷达图与多维对比表">
+          <button id="btn-export-compare" class="btn-ghost" type="button" title="导出当前雷达图与多维对比表为图片">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
               <polyline points="7 10 12 15 17 10" />
@@ -202,10 +202,7 @@
   <div id="export-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
     <div class="modal-panel export-modal-panel">
       <div class="modal-head">
-        <div class="export-head-title">
-          <h2 id="export-modal-title">导出高清图片</h2>
-          <span class="export-desktop-badge">默认电脑版宽屏视图 · 2× 超清 PNG</span>
-        </div>
+        <h2 id="export-modal-title">导出图片</h2>
         <button id="export-modal-close" class="btn-icon" type="button" aria-label="关闭导出弹窗">×</button>
       </div>
       <div class="modal-body export-modal-body">
@@ -220,7 +217,7 @@
                 </button>
                 <button class="export-type-card" data-export-type="pareto" type="button">
                   <span class="export-type-title">帕累托性价比图</span>
-                  <span class="export-type-sub">前沿曲线与官方厂商图标</span>
+                  <span class="export-type-sub">前沿曲线与性价比分布</span>
                 </button>
                 <button class="export-type-card" data-export-type="combined" type="button">
                   <span class="export-type-title">帕累托图 + 排行表</span>
@@ -294,11 +291,11 @@
 
           <div class="export-preview-pane">
             <div class="export-preview-head">
-              <span>实时预览（电脑版布局）</span>
+              <span>实时预览</span>
               <span id="export-preview-meta" class="mono">准备生成...</span>
             </div>
             <div class="export-preview-stage" id="export-preview-stage">
-              <div id="export-preview-loading" class="export-preview-loading">正在渲染高清预览...</div>
+              <div id="export-preview-loading" class="export-preview-loading">正在生成预览...</div>
               <img id="export-preview-img" class="export-preview-img" alt="导出图片预览" style="display:none" />
             </div>
           </div>
@@ -321,7 +318,7 @@
   <!-- Toast -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="scripts/exporter.js?v=8" defer></script>
-  <script src="scripts/app.js?v=8" defer></script>
+  <script src="scripts/exporter.js?v=9" defer></script>
+  <script src="scripts/app.js?v=9" defer></script>
 </body>
 </html>
