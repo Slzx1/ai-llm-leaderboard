@@ -66,6 +66,7 @@ jobs:
           cp -r styles _site/
           cp -r data _site/
           cp -r assets _site/
+          cp -r downloads _site/
           cp scripts/app.js scripts/exporter.js _site/scripts/
 
       - name: Setup Pages
