@@ -1258,6 +1258,11 @@
   }
 
   async function downloadCanvas(canvas, filename) {
+    if (window.AndroidBridge && typeof window.AndroidBridge.saveImage === "function") {
+      const dataUrl = canvas.toDataURL("image/png");
+      const ok = window.AndroidBridge.saveImage(dataUrl, filename);
+      if (ok) return null;
+    }
     const blob = await canvasToBlob(canvas);
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

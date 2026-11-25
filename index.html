@@ -2,10 +2,16 @@
 <html lang="zh-CN" data-theme="light">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="color-scheme" content="light dark" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="AI模型排行榜" />
   <title>ModelRank · AI模型排行榜</title>
   <meta name="description" content="权威、透明、自动同步更新的 AI模型排行榜。聚合 Artificial Analysis 独立综合基准与 LMArena 人类盲测榜，支持帕累托性价比前沿分析、编程、前沿学术难题、抗幻觉、推理速度与 API 价格全景对比。" />
+  <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
   <link rel="icon" type="image/png" sizes="256x256" href="assets/site-icon.png" />
   <link rel="shortcut icon" href="favicon.ico" />
@@ -26,9 +32,11 @@
       document.documentElement.setAttribute("data-theme-mode", mode);
       var meta = document.querySelector('meta[name="color-scheme"]');
       if (meta) meta.setAttribute("content", mode === "auto" ? "light dark" : resolved);
+      var tc = document.querySelector('meta[name="theme-color"]');
+      if (tc) tc.setAttribute("content", resolved === "dark" ? "#161920" : "#ffffff");
     })();
   </script>
-  <link rel="stylesheet" href="styles/main.css?v=10" />
+  <link rel="stylesheet" href="styles/main.css?v=11" />
 </head>
 <body>
   <!-- Compact Sticky Masthead -->
@@ -70,6 +78,13 @@
           <button class="theme-btn" data-theme-mode="dark" type="button" title="固定使用深色模式">深色</button>
           <button class="theme-btn" data-theme-mode="auto" type="button" title="自动跟随系统深浅色设置">自动</button>
         </div>
+
+        <button id="btn-theme-mobile" class="btn-icon mobile-only-btn" type="button" title="切换浅色 / 深色 / 自动主题" aria-label="切换主题">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" />
+          </svg>
+        </button>
       </div>
     </div>
   </header>
@@ -88,15 +103,24 @@
     <div id="track-desc-bar" class="track-desc-bar"></div>
 
     <!-- Search & Multi-Filter Toolbar -->
-    <section class="toolbar" aria-label="排行榜筛选与排序控制">
+    <section id="toolbar" class="toolbar" aria-label="排行榜筛选与排序控制">
       <div class="toolbar-left">
-        <div class="search-box">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.3-4.3" />
-          </svg>
-          <input id="search-input" class="search-input" type="search" placeholder="搜索模型名称或厂商..." autocomplete="off" />
-          <button id="search-clear" class="search-clear" type="button" aria-label="清空搜索">×</button>
+        <div class="search-row-wrap">
+          <div class="search-box">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+            <input id="search-input" class="search-input" type="search" placeholder="搜索模型名称或厂商..." autocomplete="off" />
+            <button id="search-clear" class="search-clear" type="button" aria-label="清空搜索">×</button>
+          </div>
+          <button id="btn-mobile-filter" class="btn-ghost mobile-filter-btn" type="button" aria-expanded="false" aria-controls="toolbar">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+            </svg>
+            <span>筛选</span>
+            <span id="mobile-filter-badge" class="mobile-filter-badge" style="display:none">0</span>
+          </button>
         </div>
 
         <div class="segmented" role="group" aria-label="开源与闭源筛选">
@@ -323,7 +347,7 @@
   <!-- Toast -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="scripts/exporter.js?v=10" defer></script>
-  <script src="scripts/app.js?v=10" defer></script>
+  <script src="scripts/exporter.js?v=11" defer></script>
+  <script src="scripts/app.js?v=11" defer></script>
 </body>
 </html>

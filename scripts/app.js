@@ -59,6 +59,10 @@
     btnExport: document.getElementById("btn-export"),
     btnRefresh: document.getElementById("btn-refresh"),
     themeSwitcher: document.getElementById("theme-switcher"),
+    btnThemeMobile: document.getElementById("btn-theme-mobile"),
+    toolbar: document.getElementById("toolbar"),
+    btnMobileFilter: document.getElementById("btn-mobile-filter"),
+    mobileFilterBadge: document.getElementById("mobile-filter-badge"),
     drawerBackdrop: document.getElementById("drawer-backdrop"),
     detailDrawer: document.getElementById("detail-drawer"),
     drawerTitleGroup: document.getElementById("drawer-title-group"),
@@ -254,6 +258,15 @@
     if (meta) {
       meta.setAttribute("content", normalized === "auto" ? "light dark" : resolved);
     }
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor) {
+      themeColor.setAttribute("content", resolved === "dark" ? "#161920" : "#ffffff");
+    }
+    if (window.AndroidBridge && typeof window.AndroidBridge.setTheme === "function") {
+      try {
+        window.AndroidBridge.setTheme(resolved === "dark");
+      } catch {}
+    }
 
     if (persist) {
       safeStorageSet(THEME_STORAGE_KEY, normalized);
@@ -266,6 +279,18 @@
         btn.classList.toggle("active", isActive);
         btn.setAttribute("aria-pressed", String(isActive));
       });
+    }
+
+    if (el.btnThemeMobile) {
+      const iconMap = {
+        light: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>',
+        dark: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>',
+        auto: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18"/><path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" fill-opacity="0.22"/></svg>',
+      };
+      const labelMap = { light: "当前：浅色模式（点按切换）", dark: "当前：深色模式（点按切换）", auto: "当前：跟随系统（点按切换）" };
+      el.btnThemeMobile.innerHTML = iconMap[normalized] || iconMap.auto;
+      el.btnThemeMobile.title = labelMap[normalized] || labelMap.auto;
+      el.btnThemeMobile.setAttribute("aria-label", labelMap[normalized] || "切换主题");
     }
 
     // Re-render open radar canvas so gridlines & labels match new theme immediately
@@ -1369,8 +1394,22 @@
     });
   }
 
+  function updateMobileFilterBadge() {
+    if (!el.mobileFilterBadge) return;
+    const track = getActiveTrack();
+    let activeCount = 0;
+    if (state.license !== "all") activeCount++;
+    if (state.vendor !== "all") activeCount++;
+    if (state.paretoOnly && supportsPareto(track)) activeCount++;
+    if (state.flagshipOnly) activeCount++;
+    if (track.supportsReleaseDedup && !state.dedupRelease) activeCount++;
+    el.mobileFilterBadge.textContent = String(activeCount);
+    el.mobileFilterBadge.style.display = activeCount > 0 ? "inline-flex" : "none";
+  }
+
   function renderTable() {
     const track = getActiveTrack();
+    updateMobileFilterBadge();
     const baseList = getFilteredAndSortedModels(true);
     const pareto = supportsPareto(track)
       ? computeParetoFrontier(baseList, getActiveParetoModeKey(track))
@@ -2736,6 +2775,49 @@
       if (e.target === el.sourcesModal) el.sourcesModal.classList.remove("open");
     });
 
+    el.btnThemeMobile?.addEventListener("click", () => {
+      const order = ["auto", "light", "dark"];
+      const next = order[(order.indexOf(currentThemeMode) + 1) % order.length];
+      applyThemeMode(next, true);
+      if (el.exportModal?.classList.contains("open") && exportState.theme === "current") {
+        refreshExportPreview();
+      }
+      const names = { auto: "外观：自动跟随系统", light: "外观：浅色模式", dark: "外观：深色模式" };
+      showToast(names[next]);
+    });
+
+    el.btnMobileFilter?.addEventListener("click", () => {
+      if (!el.toolbar) return;
+      const open = el.toolbar.classList.toggle("filters-open");
+      el.btnMobileFilter.setAttribute("aria-expanded", String(open));
+    });
+
+    // Native Android WebView hardware Back button handler
+    window.ModelRankHandleBack = () => {
+      if (el.exportModal?.classList.contains("open")) {
+        closeExportModal();
+        return true;
+      }
+      if (el.compareModal?.classList.contains("open")) {
+        closeCompareModal();
+        return true;
+      }
+      if (el.sourcesModal?.classList.contains("open")) {
+        el.sourcesModal.classList.remove("open");
+        return true;
+      }
+      if (el.detailDrawer?.classList.contains("open")) {
+        closeDrawer();
+        return true;
+      }
+      if (el.toolbar?.classList.contains("filters-open")) {
+        el.toolbar.classList.remove("filters-open");
+        el.btnMobileFilter?.setAttribute("aria-expanded", "false");
+        return true;
+      }
+      return false;
+    };
+
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
         closeDrawer();
@@ -2767,6 +2849,11 @@
   async function boot() {
     initTheme();
     bindEvents();
+
+    // Register lightweight PWA Service Worker on HTTPS / localhost
+    if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    }
 
     // 1. Stale: Paint immediately from localStorage SWR cache if available
     const cached = readSwrCache();
