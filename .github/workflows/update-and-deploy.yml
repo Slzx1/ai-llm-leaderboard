@@ -66,7 +66,7 @@ jobs:
           cp -r styles _site/
           cp -r data _site/
           cp -r assets _site/
-          cp scripts/app.js _site/scripts/
+          cp scripts/app.js scripts/exporter.js _site/scripts/
 
       - name: Setup Pages
         if: steps.check.outputs.should_deploy == 'true'

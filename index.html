@@ -24,7 +24,7 @@
       if (meta) meta.setAttribute("content", mode === "auto" ? "light dark" : resolved);
     })();
   </script>
-  <link rel="stylesheet" href="styles/main.css?v=7" />
+  <link rel="stylesheet" href="styles/main.css?v=8" />
 </head>
 <body>
   <!-- Compact Sticky Masthead -->
@@ -39,6 +39,15 @@
         <button id="btn-sources" class="sync-trigger" type="button" title="查看数据源与 SWR 刷新机制">
           <span class="sync-indicator" aria-hidden="true"></span>
           <span id="sync-status-label" class="sync-trigger-text">加载同步状态...</span>
+        </button>
+
+        <button id="btn-export" class="btn-ghost" type="button" title="导出排行榜、帕累托图或对比图为电脑版高清图片">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          <span>导出图片</span>
         </button>
 
         <button id="btn-refresh" class="btn-ghost" type="button" title="从服务器立即拉取最新排行快照">
@@ -173,9 +182,128 @@
     <div class="modal-panel">
       <div class="modal-head">
         <h2 id="compare-modal-title">多模型多维度能力对比</h2>
-        <button id="compare-modal-close" class="btn-icon" type="button" aria-label="关闭对比弹窗">×</button>
+        <div class="modal-head-actions">
+          <button id="btn-export-compare" class="btn-ghost" type="button" title="以电脑版宽屏高清 PNG 导出当前雷达图与多维对比表">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            <span>导出对比图</span>
+          </button>
+          <button id="compare-modal-close" class="btn-icon" type="button" aria-label="关闭对比弹窗">×</button>
+        </div>
       </div>
       <div id="compare-modal-body" class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Export Leaderboard / Chart Image Modal -->
+  <div id="export-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
+    <div class="modal-panel export-modal-panel">
+      <div class="modal-head">
+        <div class="export-head-title">
+          <h2 id="export-modal-title">导出高清图片</h2>
+          <span class="export-desktop-badge">默认电脑版宽屏视图 · 2× 超清 PNG</span>
+        </div>
+        <button id="export-modal-close" class="btn-icon" type="button" aria-label="关闭导出弹窗">×</button>
+      </div>
+      <div class="modal-body export-modal-body">
+        <div class="export-layout">
+          <div class="export-controls">
+            <div class="export-field">
+              <div class="export-field-label">选择导出内容</div>
+              <div id="export-type-grid" class="export-type-grid" role="radiogroup" aria-label="导出内容类型">
+                <button class="export-type-card active" data-export-type="table" type="button">
+                  <span class="export-type-title">排行榜表格</span>
+                  <span class="export-type-sub">任选赛道完整多列排名</span>
+                </button>
+                <button class="export-type-card" data-export-type="pareto" type="button">
+                  <span class="export-type-title">帕累托性价比图</span>
+                  <span class="export-type-sub">前沿曲线与官方厂商图标</span>
+                </button>
+                <button class="export-type-card" data-export-type="combined" type="button">
+                  <span class="export-type-title">帕累托图 + 排行表</span>
+                  <span class="export-type-sub">图表与榜单合成一张长图</span>
+                </button>
+                <button class="export-type-card" data-export-type="compare" type="button">
+                  <span class="export-type-title">多模型雷达对比</span>
+                  <span class="export-type-sub" id="export-compare-hint">需先勾选 ≥2 款模型</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="export-field" id="export-track-field">
+              <label class="export-field-label" for="export-track-select">目标排行榜赛道</label>
+              <select id="export-track-select" class="export-select"></select>
+            </div>
+
+            <div class="export-field-row" id="export-table-opts">
+              <div class="export-field">
+                <label class="export-field-label" for="export-limit-select">展示模型数量</label>
+                <select id="export-limit-select" class="export-select">
+                  <option value="10">Top 10（精简长图）</option>
+                  <option value="20" selected>Top 20（推荐）</option>
+                  <option value="30">Top 30</option>
+                  <option value="50">最多 50 款</option>
+                </select>
+              </div>
+
+              <div class="export-field">
+                <label class="export-field-label" for="export-scope-select">数据范围</label>
+                <select id="export-scope-select" class="export-select">
+                  <option value="current">跟随当前筛选与排序</option>
+                  <option value="full">全赛道默认完整榜</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="export-field-row" id="export-pareto-opts" style="display:none">
+              <div class="export-field">
+                <label class="export-field-label" for="export-pareto-mode">帕累托横轴维度</label>
+                <select id="export-pareto-mode" class="export-select">
+                  <option value="priceBlended">综合价 ($/1M Tokens)</option>
+                  <option value="costPerTask">单任务成本 ($/Task)</option>
+                  <option value="outputSpeed">输出速度 (tok/s)</option>
+                </select>
+              </div>
+
+              <div class="export-field">
+                <label class="export-field-label" for="export-pareto-scale">坐标轴刻度</label>
+                <select id="export-pareto-scale" class="export-select">
+                  <option value="log">对数刻度 (Log)</option>
+                  <option value="linear">线性刻度 (Linear)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="export-field">
+              <div class="export-field-label">导出配色主题</div>
+              <div id="export-theme-seg" class="segmented export-theme-seg" role="group" aria-label="导出图片主题">
+                <button class="seg-btn active" data-export-theme="current" type="button">跟随当前</button>
+                <button class="seg-btn" data-export-theme="light" type="button">浅色版</button>
+                <button class="seg-btn" data-export-theme="dark" type="button">深色版</button>
+              </div>
+            </div>
+
+            <div class="export-actions">
+              <button id="btn-export-download" class="btn-primary" type="button">下载高清 PNG</button>
+              <button id="btn-export-copy" class="btn-ghost" type="button">复制图片</button>
+            </div>
+          </div>
+
+          <div class="export-preview-pane">
+            <div class="export-preview-head">
+              <span>实时预览（电脑版布局）</span>
+              <span id="export-preview-meta" class="mono">准备生成...</span>
+            </div>
+            <div class="export-preview-stage" id="export-preview-stage">
+              <div id="export-preview-loading" class="export-preview-loading">正在渲染高清预览...</div>
+              <img id="export-preview-img" class="export-preview-img" alt="导出图片预览" style="display:none" />
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -193,6 +321,7 @@
   <!-- Toast -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="scripts/app.js?v=7" defer></script>
+  <script src="scripts/exporter.js?v=8" defer></script>
+  <script src="scripts/app.js?v=8" defer></script>
 </body>
 </html>

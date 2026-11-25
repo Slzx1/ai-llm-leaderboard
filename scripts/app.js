@@ -56,6 +56,7 @@
     syncIndicator: document.querySelector(".sync-indicator"),
     syncStatusLabel: document.getElementById("sync-status-label"),
     btnSources: document.getElementById("btn-sources"),
+    btnExport: document.getElementById("btn-export"),
     btnRefresh: document.getElementById("btn-refresh"),
     themeSwitcher: document.getElementById("theme-switcher"),
     drawerBackdrop: document.getElementById("drawer-backdrop"),
@@ -71,6 +72,25 @@
     compareModal: document.getElementById("compare-modal"),
     compareModalClose: document.getElementById("compare-modal-close"),
     compareModalBody: document.getElementById("compare-modal-body"),
+    btnExportCompare: document.getElementById("btn-export-compare"),
+    exportModal: document.getElementById("export-modal"),
+    exportModalClose: document.getElementById("export-modal-close"),
+    exportTypeGrid: document.getElementById("export-type-grid"),
+    exportCompareHint: document.getElementById("export-compare-hint"),
+    exportTrackField: document.getElementById("export-track-field"),
+    exportTrackSelect: document.getElementById("export-track-select"),
+    exportTableOpts: document.getElementById("export-table-opts"),
+    exportLimitSelect: document.getElementById("export-limit-select"),
+    exportScopeSelect: document.getElementById("export-scope-select"),
+    exportParetoOpts: document.getElementById("export-pareto-opts"),
+    exportParetoMode: document.getElementById("export-pareto-mode"),
+    exportParetoScale: document.getElementById("export-pareto-scale"),
+    exportThemeSeg: document.getElementById("export-theme-seg"),
+    btnExportDownload: document.getElementById("btn-export-download"),
+    btnExportCopy: document.getElementById("btn-export-copy"),
+    exportPreviewMeta: document.getElementById("export-preview-meta"),
+    exportPreviewLoading: document.getElementById("export-preview-loading"),
+    exportPreviewImg: document.getElementById("export-preview-img"),
     sourcesModal: document.getElementById("sources-modal"),
     sourcesModalClose: document.getElementById("sources-modal-close"),
     sourcesModalBody: document.getElementById("sources-modal-body"),
@@ -2055,6 +2075,414 @@
   }
 
   /* ========================================================================
+     Desktop-Layout High-DPI Image Export Controller (Leaderboard / Pareto / Radar)
+     ======================================================================== */
+
+  const exportState = {
+    type: "table", // table | pareto | combined | compare
+    trackId: "aa_intelligence",
+    limit: 20,
+    scope: "current", // current | full
+    paretoMode: "priceBlended",
+    paretoScale: "log",
+    theme: "current", // current | light | dark
+    lastCanvas: null,
+    lastFilename: "ModelRank.png",
+    previewUrl: null,
+    renderToken: 0,
+  };
+
+  function getExporterHelpers() {
+    return {
+      getVendor,
+      formatColValue,
+      formatContext,
+      formatNumber,
+      computeAbsoluteBarPercent,
+      niceLogTicks,
+      niceLinearTicks,
+      formatAxisTick,
+    };
+  }
+
+  function resolveExportIsDark(themeChoice = "current") {
+    if (themeChoice === "dark") return true;
+    if (themeChoice === "light") return false;
+    return document.documentElement.getAttribute("data-theme") === "dark";
+  }
+
+  function formatFileStamp() {
+    const d = new Date(state.data?.meta?.generatedAt || Date.now());
+    const pad = (x) => String(x).padStart(2, "0");
+    return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
+  }
+
+  function sanitizeFilenamePart(str) {
+    return String(str || "export").replace(/[\\/:*?"<>|\s]+/g, "_");
+  }
+
+  function buildTrackModelsForExport(track, useCurrentFilters) {
+    const isSameTrack = track.id === state.trackId;
+    const applyLive = useCurrentFilters && isSameTrack;
+
+    let list = [...track.models];
+    if (applyLive) {
+      const q = state.search.trim().toLowerCase();
+      list = list.filter((m) => {
+        if (state.license === "open" && !m.isOpen) return false;
+        if (state.license === "closed" && m.isOpen) return false;
+        if (state.vendor !== "all" && m.vendor !== state.vendor) return false;
+        if (q) {
+          const v = getVendor(m.vendor);
+          const hay = `${m.name} ${m.releaseName || ""} ${m.vendor} ${v.name} ${v.nameZh} ${m.license}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
+    } else if (useCurrentFilters) {
+      // Even when exporting another track with "current" scope, honor license & vendor filters if applicable
+      list = list.filter((m) => {
+        if (state.license === "open" && !m.isOpen) return false;
+        if (state.license === "closed" && m.isOpen) return false;
+        if (state.vendor !== "all" && m.vendor !== state.vendor) return false;
+        return true;
+      });
+    }
+
+    const primary = track.columns[0];
+    const sortKey = applyLive ? state.sortKey : primary.key;
+    const sortDir = applyLive ? state.sortDir : primary.lowerIsBetter ? "asc" : "desc";
+    const dir = sortDir === "asc" ? 1 : -1;
+
+    list.sort((a, b) => {
+      const va = sortKey === "votes" ? a.votes : a.scores?.[sortKey];
+      const vb = sortKey === "votes" ? b.votes : b.scores?.[sortKey];
+      const aMissing = va == null || Number.isNaN(va);
+      const bMissing = vb == null || Number.isNaN(vb);
+      if (aMissing && bMissing) return a.rank - b.rank;
+      if (aMissing) return 1;
+      if (bMissing) return -1;
+      if (va === vb) return a.rank - b.rank;
+      return (va - vb) * dir;
+    });
+
+    const dedupOn = track.supportsReleaseDedup && (useCurrentFilters ? state.dedupRelease : true);
+    if (dedupOn) {
+      const seenRel = new Set();
+      list = list.filter((m) => {
+        const rk = m.releaseSlug || m.name;
+        if (seenRel.has(rk)) return false;
+        seenRel.add(rk);
+        return true;
+      });
+    }
+
+    if (useCurrentFilters && state.flagshipOnly) {
+      const seen = new Set();
+      list = list.filter((m) => {
+        if (seen.has(m.vendor)) return false;
+        seen.add(m.vendor);
+        return true;
+      });
+    }
+
+    return { list, sortKey, sortDir, dedupOn };
+  }
+
+  function buildExportTags(track, opts) {
+    const { sortKey, sortDir, dedupOn, useCurrentFilters, limit, totalMatched, isParetoOnly } = opts;
+    const tags = [];
+    const activeCol = track.columns.find((c) => c.key === sortKey) || track.columns[0];
+    tags.push({
+      text: `排序：${sortKey === "votes" ? "盲测票数" : activeCol.label} ${sortDir === "desc" ? "↓" : "↑"}`,
+      accent: true,
+    });
+    if (limit != null) {
+      tags.push({ text: `展示 Top ${Math.min(limit, totalMatched)} / 共 ${totalMatched} 款` });
+    }
+    if (dedupOn) tags.push({ text: "同模型仅保留最优" });
+    if (useCurrentFilters) {
+      if (state.license === "open") tags.push({ text: "仅开源模型" });
+      else if (state.license === "closed") tags.push({ text: "仅闭源模型" });
+      if (state.vendor !== "all") tags.push({ text: `厂商：${getVendor(state.vendor).name}` });
+      if (state.flagshipOnly) tags.push({ text: "仅看各厂商最强" });
+      if (isParetoOnly) tags.push({ text: "仅看帕累托最优" });
+      if (state.search.trim() && track.id === state.trackId) {
+        tags.push({ text: `搜索：${state.search.trim()}` });
+      }
+    } else {
+      tags.push({ text: "全赛道完整榜" });
+    }
+    return tags;
+  }
+
+  function resolveParetoTrackForExport(selectedTrackId) {
+    const chosen = state.data?.tracks?.[selectedTrackId];
+    if (chosen && supportsPareto(chosen)) return chosen;
+    return state.data?.tracks?.aa_pareto || state.data?.tracks?.aa_intelligence || getActiveTrack();
+  }
+
+  async function buildCompareExportCanvas(themeChoice = "current") {
+    const exporter = window.ModelRankExporter;
+    if (!exporter) throw new Error("导出模块尚未就绪");
+    const track = getActiveTrack();
+    const models = state.compareIds
+      .map((id) => track.models.find((m) => m.id === id))
+      .filter(Boolean);
+    if (models.length < 2) throw new Error("请至少勾选 2 款模型进行多维对比");
+
+    const stats = computeColumnStats(track);
+    const cols = track.columns;
+    const radarCols = cols.filter((c) => !c.lowerIsBetter && c.format !== "speed");
+    const effectiveRadarCols = radarCols.length >= 3 ? radarCols.slice(0, 7) : cols.slice(0, 7);
+    const srcMeta = state.data.meta.sources.find((s) => s.id === track.source);
+
+    const canvas = await exporter.renderCompareCanvas({
+      track,
+      models,
+      radarCols: effectiveRadarCols,
+      stats,
+      displayRankMap: state.displayRankMap,
+      isDark: resolveExportIsDark(themeChoice),
+      headerInfo: {
+        title: `AI 大模型多维度能力对比 · ${track.shortName}`,
+        sourceName: srcMeta?.name || track.source,
+        syncedAt: formatDateTimeLocal(state.data.meta.generatedAt),
+        tags: [
+          { text: `对比 ${models.length} 款模型`, accent: true },
+          { text: "雷达图绝对刻度 (0–100)" },
+          { text: "电脑版宽屏视图" },
+        ],
+      },
+      helpers: getExporterHelpers(),
+    });
+
+    const filename = `ModelRank_雷达对比_${sanitizeFilenamePart(track.shortName)}_${formatFileStamp()}.png`;
+    return { canvas, filename };
+  }
+
+  async function buildCurrentExportCanvas() {
+    const exporter = window.ModelRankExporter;
+    if (!exporter) throw new Error("导出模块尚未就绪");
+
+    if (exportState.type === "compare") {
+      return await buildCompareExportCanvas(exportState.theme);
+    }
+
+    const isDark = resolveExportIsDark(exportState.theme);
+    const useCurrent = exportState.scope === "current";
+
+    const track =
+      exportState.type === "pareto" || exportState.type === "combined"
+        ? resolveParetoTrackForExport(exportState.trackId)
+        : state.data.tracks[exportState.trackId] || getActiveTrack();
+
+    const { list: baseList, sortKey, sortDir, dedupOn } = buildTrackModelsForExport(track, useCurrent);
+    const paretoMode = exportState.paretoMode || getActiveParetoModeKey(track);
+    const pareto = supportsPareto(track) ? computeParetoFrontier(baseList, paretoMode) : null;
+    const applyParetoOnly = useCurrent && state.paretoOnly && pareto && track.id === state.trackId;
+    const fullList = applyParetoOnly ? baseList.filter((m) => pareto.frontierSet.has(m.id)) : baseList;
+    const sliced = fullList.slice(0, exportState.limit);
+    const globalStats = computeColumnStats(track, getGlobalTierBaseline(track));
+    const hasVotes = track.models.some((m) => m.votes != null);
+    const srcMeta = state.data.meta.sources.find((s) => s.id === track.source);
+
+    const titleMap = {
+      table: `AI 大模型排行榜 · ${track.name}`,
+      pareto: `AI 大模型帕累托性价比前沿`,
+      combined: `AI 大模型帕累托性价比与排行榜`,
+    };
+
+    const tags = buildExportTags(track, {
+      sortKey,
+      sortDir,
+      dedupOn,
+      useCurrentFilters: useCurrent,
+      limit: exportState.type === "pareto" ? null : exportState.limit,
+      totalMatched: fullList.length,
+      isParetoOnly: applyParetoOnly,
+    });
+    if (exportState.type === "pareto" || exportState.type === "combined") {
+      const cfg = PARETO_MODES[paretoMode] || PARETO_MODES.priceBlended;
+      tags.splice(1, 0, {
+        text: `横轴：${cfg.shortLabel} (${exportState.paretoScale === "log" ? "对数" : "线性"})`,
+        accent: false,
+      });
+    }
+
+    const canvas = await exporter.renderReportCanvas({
+      mode: exportState.type,
+      track,
+      models: sliced,
+      globalStats,
+      pareto,
+      paretoScale: exportState.paretoScale,
+      paretoOnly: applyParetoOnly,
+      sortKey,
+      sortDir,
+      hasVotes,
+      isDark,
+      headerInfo: {
+        title: titleMap[exportState.type] || `AI 大模型排行榜 · ${track.name}`,
+        sourceName: srcMeta?.name || track.source,
+        syncedAt: formatDateTimeLocal(state.data.meta.generatedAt),
+        tags,
+      },
+      helpers: getExporterHelpers(),
+    });
+
+    const suffix =
+      exportState.type === "pareto"
+        ? `帕累托_${sanitizeFilenamePart((PARETO_MODES[paretoMode] || PARETO_MODES.priceBlended).shortLabel)}`
+        : exportState.type === "combined"
+          ? `帕累托全景_Top${sliced.length}`
+          : `${sanitizeFilenamePart(track.shortName)}_Top${sliced.length}`;
+
+    return {
+      canvas,
+      filename: `ModelRank_${suffix}_${formatFileStamp()}.png`,
+    };
+  }
+
+  function syncExportFormVisibility() {
+    const t = exportState.type;
+    const canCompare = state.compareIds.length >= 2;
+    const cmpBtn = el.exportTypeGrid?.querySelector('[data-export-type="compare"]');
+    if (cmpBtn) {
+      cmpBtn.disabled = !canCompare;
+      if (el.exportCompareHint) {
+        el.exportCompareHint.textContent = canCompare
+          ? `已选 ${state.compareIds.length} 款模型，可直接导出`
+          : "需先勾选 ≥2 款模型";
+      }
+    }
+
+    el.exportTypeGrid?.querySelectorAll(".export-type-card").forEach((btn) => {
+      btn.classList.toggle("active", btn.getAttribute("data-export-type") === t);
+    });
+
+    el.exportThemeSeg?.querySelectorAll(".seg-btn").forEach((btn) => {
+      btn.classList.toggle("active", btn.getAttribute("data-export-theme") === exportState.theme);
+    });
+
+    const isCompare = t === "compare";
+    const showTrack = t === "table";
+    const showTableOpts = t === "table" || t === "combined";
+    const showParetoOpts = t === "pareto" || t === "combined";
+
+    if (el.exportTrackField) el.exportTrackField.style.display = showTrack ? "flex" : "none";
+    if (el.exportTableOpts) el.exportTableOpts.style.display = showTableOpts ? "grid" : "none";
+    if (el.exportParetoOpts) el.exportParetoOpts.style.display = showParetoOpts ? "grid" : "none";
+    if (el.exportLimitSelect) el.exportLimitSelect.value = String(exportState.limit);
+    if (el.exportScopeSelect) el.exportScopeSelect.value = exportState.scope;
+    if (el.exportParetoMode) el.exportParetoMode.value = exportState.paretoMode;
+    if (el.exportParetoScale) el.exportParetoScale.value = exportState.paretoScale;
+
+    if (isCompare && !canCompare) {
+      exportState.type = "table";
+      syncExportFormVisibility();
+    }
+  }
+
+  async function refreshExportPreview() {
+    if (!state.data || !el.exportModal?.classList.contains("open")) return;
+    const token = ++exportState.renderToken;
+    el.exportPreviewLoading.style.display = "block";
+    el.exportPreviewLoading.textContent = "正在渲染电脑版 2× 高清预览...";
+    el.exportPreviewImg.style.display = "none";
+    el.exportPreviewMeta.textContent = "渲染中...";
+    el.btnExportDownload.disabled = true;
+    el.btnExportCopy.disabled = true;
+
+    try {
+      const { canvas, filename } = await buildCurrentExportCanvas();
+      if (token !== exportState.renderToken) return;
+
+      const blob = await window.ModelRankExporter.canvasToBlob(canvas);
+      if (token !== exportState.renderToken) return;
+
+      if (exportState.previewUrl) {
+        URL.revokeObjectURL(exportState.previewUrl);
+      }
+      exportState.previewUrl = URL.createObjectURL(blob);
+      exportState.lastCanvas = canvas;
+      exportState.lastFilename = filename;
+
+      el.exportPreviewImg.src = exportState.previewUrl;
+      el.exportPreviewImg.style.display = "block";
+      el.exportPreviewLoading.style.display = "none";
+      const kb = Math.round(blob.size / 1024);
+      el.exportPreviewMeta.textContent = `${canvas.width} × ${canvas.height} px · ${kb} KB PNG`;
+      el.btnExportDownload.disabled = false;
+      el.btnExportCopy.disabled = false;
+    } catch (err) {
+      if (token !== exportState.renderToken) return;
+      el.exportPreviewLoading.textContent = `预览生成失败：${err.message}`;
+      el.exportPreviewMeta.textContent = "渲染异常";
+    }
+  }
+
+  function openExportModal(presetType = null) {
+    if (!state.data) return;
+    const order = state.data.meta.trackOrder || Object.keys(state.data.tracks);
+    el.exportTrackSelect.innerHTML = order
+      .filter((id) => state.data.tracks[id])
+      .map((id) => {
+        const t = state.data.tracks[id];
+        return `<option value="${esc(id)}">${esc(t.name)} (${t.shortName})</option>`;
+      })
+      .join("");
+
+    const active = getActiveTrack();
+    exportState.trackId = active.id;
+    exportState.paretoMode = state.paretoMode;
+    exportState.paretoScale = state.paretoScale;
+    exportState.scope = "current";
+    exportState.type = presetType || (active.isParetoTrack ? "combined" : "table");
+    el.exportTrackSelect.value = exportState.trackId;
+
+    syncExportFormVisibility();
+    el.exportModal.classList.add("open");
+    refreshExportPreview();
+  }
+
+  function closeExportModal() {
+    el.exportModal?.classList.remove("open");
+    exportState.renderToken++;
+    if (exportState.previewUrl) {
+      URL.revokeObjectURL(exportState.previewUrl);
+      exportState.previewUrl = null;
+    }
+  }
+
+  async function handleDirectCompareExport() {
+    if (!state.data || state.compareIds.length < 2) {
+      showToast("请先勾选至少 2 款模型进行对比");
+      return;
+    }
+    const btn = el.btnExportCompare;
+    const origText = btn?.querySelector("span")?.textContent || "导出对比图";
+    if (btn) {
+      btn.disabled = true;
+      const sp = btn.querySelector("span");
+      if (sp) sp.textContent = "生成中...";
+    }
+    try {
+      const { canvas, filename } = await buildCompareExportCanvas("current");
+      await window.ModelRankExporter.downloadCanvas(canvas, filename);
+      showToast(`已导出电脑版高清对比图（${canvas.width}×${canvas.height}）`);
+    } catch (err) {
+      showToast(`导出失败：${err.message}`);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        const sp = btn.querySelector("span");
+        if (sp) sp.textContent = origText;
+      }
+    }
+  }
+
+  /* ========================================================================
      Navigation & Event Wiring
      ======================================================================== */
 
@@ -2078,9 +2506,13 @@
         if (!btn) return;
         const mode = btn.getAttribute("data-theme-mode");
         applyThemeMode(mode, true);
+        if (el.exportModal?.classList.contains("open") && exportState.theme === "current") {
+          refreshExportPreview();
+        }
       });
     }
 
+    el.btnExport?.addEventListener("click", () => openExportModal());
     el.btnRefresh.addEventListener("click", () => revalidateSwr({ force: true, silent: false }));
     el.btnSources.addEventListener("click", openSourcesModal);
 
@@ -2216,6 +2648,7 @@
       renderCompareDock();
     });
     el.btnOpenCompare.addEventListener("click", openCompareModal);
+    el.btnExportCompare?.addEventListener("click", handleDirectCompareExport);
 
     const closeCompareModal = () => {
       el.compareModal.classList.remove("open");
@@ -2224,6 +2657,79 @@
     el.compareModalClose.addEventListener("click", closeCompareModal);
     el.compareModal.addEventListener("click", (e) => {
       if (e.target === el.compareModal) closeCompareModal();
+    });
+
+    // Export Modal Events
+    el.exportModalClose?.addEventListener("click", closeExportModal);
+    el.exportModal?.addEventListener("click", (e) => {
+      if (e.target === el.exportModal) closeExportModal();
+    });
+
+    el.exportTypeGrid?.addEventListener("click", (e) => {
+      const btn = e.target.closest(".export-type-card[data-export-type]");
+      if (!btn || btn.disabled) return;
+      exportState.type = btn.getAttribute("data-export-type");
+      syncExportFormVisibility();
+      refreshExportPreview();
+    });
+
+    el.exportTrackSelect?.addEventListener("change", () => {
+      exportState.trackId = el.exportTrackSelect.value;
+      refreshExportPreview();
+    });
+
+    el.exportLimitSelect?.addEventListener("change", () => {
+      exportState.limit = Number(el.exportLimitSelect.value) || 20;
+      refreshExportPreview();
+    });
+
+    el.exportScopeSelect?.addEventListener("change", () => {
+      exportState.scope = el.exportScopeSelect.value;
+      refreshExportPreview();
+    });
+
+    el.exportParetoMode?.addEventListener("change", () => {
+      exportState.paretoMode = el.exportParetoMode.value;
+      exportState.paretoScale = PARETO_MODES[exportState.paretoMode]?.defaultScale || "log";
+      if (el.exportParetoScale) el.exportParetoScale.value = exportState.paretoScale;
+      refreshExportPreview();
+    });
+
+    el.exportParetoScale?.addEventListener("change", () => {
+      exportState.paretoScale = el.exportParetoScale.value;
+      refreshExportPreview();
+    });
+
+    el.exportThemeSeg?.addEventListener("click", (e) => {
+      const btn = e.target.closest(".seg-btn[data-export-theme]");
+      if (!btn) return;
+      exportState.theme = btn.getAttribute("data-export-theme");
+      syncExportFormVisibility();
+      refreshExportPreview();
+    });
+
+    el.btnExportDownload?.addEventListener("click", async () => {
+      try {
+        const canvas = exportState.lastCanvas || (await buildCurrentExportCanvas()).canvas;
+        await window.ModelRankExporter.downloadCanvas(canvas, exportState.lastFilename);
+        showToast(`已导出电脑版高清图片：${exportState.lastFilename}`);
+      } catch (err) {
+        showToast(`导出失败：${err.message}`);
+      }
+    });
+
+    el.btnExportCopy?.addEventListener("click", async () => {
+      try {
+        const canvas = exportState.lastCanvas || (await buildCurrentExportCanvas()).canvas;
+        const res = await window.ModelRankExporter.copyCanvasToClipboard(canvas);
+        if (res.ok) {
+          showToast("已将高清图片复制到剪贴板，可直接粘贴发送");
+        } else {
+          showToast(res.reason || "复制失败，请点击下载高清 PNG");
+        }
+      } catch (err) {
+        showToast(`复制失败：${err.message}`);
+      }
     });
 
     el.sourcesModalClose.addEventListener("click", () => el.sourcesModal.classList.remove("open"));
@@ -2235,6 +2741,7 @@
       if (e.key === "Escape") {
         closeDrawer();
         closeCompareModal();
+        closeExportModal();
         el.sourcesModal.classList.remove("open");
       }
     });
