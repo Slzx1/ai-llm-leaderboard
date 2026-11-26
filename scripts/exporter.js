@@ -1182,8 +1182,11 @@
     // Data rows (Rank, License, + all columns)
     const rows = [
       {
-        label: "当前排名",
-        vals: models.map((m) => `#${displayRankMap?.get(m.id) ?? m.rank}`),
+        label: "赛道排名",
+        vals: models.map((m) => {
+          const r = displayRankMap?.get(m.id);
+          return r != null ? `#${r}` : `全档位 #${m.rank}`;
+        }),
         bestIdx: -1,
         isMono: true,
       },

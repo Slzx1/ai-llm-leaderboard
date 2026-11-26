@@ -1612,6 +1612,41 @@
      Model Detail Drawer (with Effort Tiers & Cross-Track Lookup)
      ======================================================================== */
 
+  function computeTrackRankMap(track, dedupOn = false) {
+    const map = new Map();
+    const primary = track.columns[0];
+    const dir = primary.lowerIsBetter ? 1 : -1;
+    let list = [...track.models].sort((a, b) => {
+      const va = a.scores?.[primary.key];
+      const vb = b.scores?.[primary.key];
+      const aMissing = va == null || Number.isNaN(va);
+      const bMissing = vb == null || Number.isNaN(vb);
+      if (aMissing && bMissing) return a.rank - b.rank;
+      if (aMissing) return 1;
+      if (bMissing) return -1;
+      if (va === vb) return a.rank - b.rank;
+      return (va - vb) * dir;
+    });
+
+    if (track.supportsReleaseDedup && dedupOn) {
+      const seen = new Set();
+      list = list.filter((m) => {
+        const rk = m.releaseSlug || m.name;
+        if (seen.has(rk)) return false;
+        seen.add(rk);
+        return true;
+      });
+    }
+    list.forEach((m, i) => map.set(m.id, i + 1));
+    return map;
+  }
+
+  function formatCanonicalRank(model, rankMap) {
+    const r = rankMap.get(model.id);
+    if (r != null) return `#${r}`;
+    return `全档位 #${model.rank}`;
+  }
+
   function openModelDrawer(modelId) {
     const track = getActiveTrack();
     const model = track.models.find((m) => m.id === modelId);
@@ -1621,12 +1656,24 @@
     const v = getVendor(model.vendor);
     const stats = computeColumnStats(track);
     const primaryCol = track.columns[0];
+    const dedupOn = Boolean(track.supportsReleaseDedup && state.dedupRelease);
+    const trackRankMap = computeTrackRankMap(track, dedupOn);
+    const canonicalRank = trackRankMap.get(model.id);
+    const shownRank = canonicalRank != null ? canonicalRank : model.rank;
     const viewRank = state.displayRankMap?.get(model.id);
-    const shownRank = viewRank != null ? viewRank : model.rank;
-    const rankSub =
-      viewRank != null && viewRank !== model.rank
-        ? `<span style="font-size:.73rem;color:var(--text-muted);font-weight:500"> (全档位 #${model.rank})</span>`
-        : "";
+    const isFiltered =
+      Boolean(state.search.trim()) ||
+      state.license !== "all" ||
+      state.vendor !== "all" ||
+      state.flagshipOnly ||
+      (state.paretoOnly && supportsPareto(track));
+
+    let rankSub = "";
+    if (isFiltered && viewRank != null && viewRank !== shownRank) {
+      rankSub = `<span style="font-size:.73rem;color:var(--text-muted);font-weight:500"> (筛选内 #${viewRank})</span>`;
+    } else if (dedupOn && canonicalRank != null && canonicalRank !== model.rank) {
+      rankSub = `<span style="font-size:.73rem;color:var(--text-muted);font-weight:500"> (全档位 #${model.rank})</span>`;
+    }
 
     el.drawerTitleGroup.innerHTML = `
       ${renderVendorIconHtml(model.vendor, "lg")}
@@ -1872,6 +1919,8 @@
     }
 
     const stats = computeColumnStats(track);
+    const dedupOn = Boolean(track.supportsReleaseDedup && state.dedupRelease);
+    const trackRankMap = computeTrackRankMap(track, dedupOn);
     const cols = track.columns;
     // Plot capability dimensions (non-price) on radar if >= 3, else all columns
     const radarCols = cols.filter((c) => !c.lowerIsBetter && c.format !== "speed");
@@ -1943,8 +1992,8 @@
             </thead>
             <tbody>
               <tr>
-                <td>当前排名</td>
-                ${models.map((m) => `<td class="mono">#${state.displayRankMap?.get(m.id) ?? m.rank}</td>`).join("")}
+                <td>赛道排名</td>
+                ${models.map((m) => `<td class="mono">${esc(formatCanonicalRank(m, trackRankMap))}</td>`).join("")}
               </tr>
               <tr>
                 <td>协议类型</td>
@@ -2271,6 +2320,8 @@
     if (models.length < 2) throw new Error("请至少勾选 2 款模型进行多维对比");
 
     const stats = computeColumnStats(track);
+    const dedupOn = Boolean(track.supportsReleaseDedup && state.dedupRelease);
+    const trackRankMap = computeTrackRankMap(track, dedupOn);
     const cols = track.columns;
     const radarCols = cols.filter((c) => !c.lowerIsBetter && c.format !== "speed");
     const effectiveRadarCols = radarCols.length >= 3 ? radarCols.slice(0, 7) : cols.slice(0, 7);
@@ -2281,10 +2332,10 @@
       models,
       radarCols: effectiveRadarCols,
       stats,
-      displayRankMap: state.displayRankMap,
+      displayRankMap: trackRankMap,
       isDark: resolveExportIsDark(themeChoice),
       headerInfo: {
-        title: `AI 大模型多维度能力对比 · ${track.shortName}`,
+        title: `AI模型多维度能力对比 · ${track.shortName}`,
         sourceName: srcMeta?.name || track.source,
         syncedAt: formatDateTimeLocal(state.data.meta.generatedAt),
         tags: [
